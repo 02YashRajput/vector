@@ -11,7 +11,7 @@ final class PanelManager: ObservableObject {
     private init() {}
 
     func setup() {
-        let panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 700, height: 60))
+        let panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 700, height: 400))
 
         let visualEffect = NSVisualEffectView()
         visualEffect.blendingMode = .behindWindow
@@ -35,7 +35,7 @@ final class PanelManager: ObservableObject {
         ])
 
         self.panel = panel
-        centerOnScreen(size: NSSize(width: 700, height: 60))
+        centerOnScreen(size: NSSize(width: 700, height: 400))
     }
 
     func show() {
@@ -73,5 +73,12 @@ final class PanelManager: ObservableObject {
             display: true,
             animate: true
         )
+    }
+
+    func updateSize(width: CGFloat, height: CGFloat) {
+        guard let panel else { return }
+        var frame = panel.frame
+        frame.size = NSSize(width: width, height: height)
+        panel.setFrame(frame, display: true, animate: true)
     }
 }

@@ -16,10 +16,6 @@ enum Page {
 struct RootView: View {
     @State private var page: Page = UserDefaults.standard.bool(forKey: "is_onboarding_complete") ? .search : .onboarding
 
-    static func updatePanel(size: NSSize) {
-        PanelManager.shared.centerOnScreen(size: size)
-    }
-
     var body: some View {
         ZStack {
             switch page {

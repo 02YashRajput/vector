@@ -22,7 +22,8 @@ final class FloatingPanel: NSPanel {
 
         hasShadow = true
 
-        isMovableByWindowBackground = true
+        let movable = UserDefaults.standard.object(forKey: "isMovableByWindowBackground") as? Bool ?? true
+        isMovableByWindowBackground = movable
 
         hidesOnDeactivate = false
     }

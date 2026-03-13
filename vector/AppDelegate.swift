@@ -2,6 +2,9 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Ensure app doesn't show in Dock
+        NSApp.setActivationPolicy(.accessory)
+
         PanelManager.shared.setup()
         PanelManager.shared.show()
 
