@@ -1,0 +1,60 @@
+# macOS/Swift/SwiftUI/Xcode typical .gitignore
+.DS_Store
+*.swp
+*.xcuserstate
+*.xcscmblueprint
+*.xcuserdatad/
+*.xcworkspace/
+*.xcodeproj/
+*.playground/
+*.moved-aside
+*.xcassets/
+*.idea/
+*.hmap
+*.ipa
+*.dSYM
+*.app
+*.framework
+*.xcarchive
+*.xcuserdata/
+*.log
+*.orig
+*.lock
+*.tmp
+*.swp
+*.swo
+*.plist~
+
+# Build products
+build/
+DerivedData/
+
+# SwiftPM
+.swiftpm/
+Package.resolved
+
+# Carthage
+Carthage/Build/
+
+# CocoaPods
+Pods/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
+# SPM Packages
+Packages/
+
+# User-specific files
+*.local
+*.env
+
+# Xcode automatic backup files
+*.xcuserstate
+
+# App-specific
+vector/Assets.xcassets/
+vector/AppIcon.appiconset/

@@ -6,19 +6,32 @@
 //
 
 import SwiftUI
+import AppKit
 
-struct ContentView: View {
+enum Page {
+    case search
+    case onboarding
+}
+
+struct RootView: View {
+    @State private var page: Page = UserDefaults.standard.bool(forKey: "is_onboarding_complete") ? .search : .onboarding
+
+    static func updatePanel(size: NSSize) {
+        PanelManager.shared.centerOnScreen(size: size)
+    }
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        ZStack {
+            switch page {
+            case .search:
+                SearchPage(page: $page)
+            case .onboarding:
+                OnBoardingPage(page: $page)
+            }
         }
-        .padding()
     }
 }
 
 #Preview {
-    ContentView()
+    RootView()
 }
