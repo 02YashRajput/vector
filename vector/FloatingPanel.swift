@@ -12,12 +12,8 @@ final class FloatingPanel: NSPanel {
             defer: false
         )
 
-        level = .statusBar
-        collectionBehavior = [
-            .canJoinAllSpaces,
-            .fullScreenAuxiliary,
-            .stationary
-        ]
+        level = .floating
+        collectionBehavior = [.moveToActiveSpace]
 
         isOpaque = false
         backgroundColor = .clear

@@ -1,10 +1,12 @@
 import AppKit
 import SwiftUI
+import Combine
 
-final class PanelManager {
+final class PanelManager: ObservableObject {
     static let shared = PanelManager()
 
     private(set) var panel: FloatingPanel?
+    @Published var isKeyAndVisible = false
 
     private init() {}
 
@@ -38,14 +40,19 @@ final class PanelManager {
 
     func show() {
         guard let panel else { return }
-        panel.orderFrontRegardless()
+
         NSApp.activate(ignoringOtherApps: true)
-        panel.makeKeyAndOrderFront(nil)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            panel.makeKeyAndOrderFront(self)
+            self.isKeyAndVisible = true
+        }
     }
 
     func hide() {
         guard let panel else { return }
         panel.orderOut(nil)
+        isKeyAndVisible = false
     }
 
     func toggle() {

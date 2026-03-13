@@ -6,18 +6,19 @@ struct SearchPage: View {
     @State private var escMonitor: Any?
     @State private var clickOutsideMonitor: Any?
     @State private var searchText: String = ""
+    @StateObject private var panelManager = PanelManager.shared
 
     var body: some View {
         HStack(spacing: 16) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 22, weight: .regular))
                 .foregroundColor(.secondary)
-                TextField("Search…", text: $searchText)
+            TextField("Search…", text: $searchText)
                 .textFieldStyle(PlainTextFieldStyle())
                 .font(.system(size: 20))
                 .frame(height: 36)
                 .padding(.horizontal, 4)
-                    .focused($isSearchFocused)
+                .focused($isSearchFocused)
             Spacer(minLength: 0)
             Text("esc")
                 .font(.system(size: 14, weight: .medium, design: .monospaced))
@@ -30,9 +31,6 @@ struct SearchPage: View {
         .frame(width: 700, height: 60)
         .onAppear {
             RootView.updatePanel(size: NSSize(width: 700, height: 60))
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    isSearchFocused = true
-                }
 
             escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.keyCode == 53 {
@@ -43,6 +41,13 @@ struct SearchPage: View {
             }
             clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
                 PanelManager.shared.hide()
+            }
+        }
+        .onChange(of: panelManager.isKeyAndVisible) { isKey in
+            if isKey {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    isSearchFocused = true
+                }
             }
         }
         .onDisappear {
