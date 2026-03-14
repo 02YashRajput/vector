@@ -11,6 +11,9 @@ import AppKit
 enum Page {
     case search
     case onboarding
+    case settings
+    case aliases
+    case scripts
 }
 
 struct RootView: View {
@@ -23,6 +26,25 @@ struct RootView: View {
                 SearchPage(page: $page)
             case .onboarding:
                 OnBoardingPage(page: $page)
+            case .settings:
+                SettingsPage(page: $page)
+            case .aliases:
+                AliasesPage(page: $page)
+            case .scripts:
+                ScriptsPage(page: $page)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .changePage)) { notification in
+            if let pageRaw = notification.userInfo?["page"] as? String,
+               let targetPage = AppSettingsCommand.AppPage(rawValue: pageRaw) {
+                switch targetPage {
+                case .settings:
+                    page = .settings
+                case .aliases:
+                    page = .aliases
+                case .scripts:
+                    page = .scripts
+                }
             }
         }
     }

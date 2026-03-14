@@ -9,8 +9,6 @@ final class CommandRegistry: ObservableObject {
     @Published private(set) var allCommands: [any Command] = []
     @Published private(set) var aliases: [String: any Command] = [:]
 
-    private var prefixHandlers: [String: PrefixHandler] = [:]
-
     private init() {}
 
     // MARK: - Registration
@@ -27,10 +25,6 @@ final class CommandRegistry: ObservableObject {
         register(aliasCmd)
     }
 
-    func registerPrefixHandler(_ prefix: String, handler: PrefixHandler) {
-        prefixHandlers[prefix.lowercased()] = handler
-    }
-
     // MARK: - Query / Search
 
     func search(query: String) -> [any Command] {
@@ -39,27 +33,32 @@ final class CommandRegistry: ObservableObject {
             return allCommands
         }
 
-        // Check for prefix syntax: "prefix:query"
-        if let colonIndex = trimmed.firstIndex(of: ":") {
-            let prefix = String(trimmed[..<colonIndex]).lowercased()
-            let queryPart = String(trimmed[trimmed.index(after: colonIndex)...])
+        var results: [any Command] = []
+        var addedIds = Set<String>()
 
-            if let handler = prefixHandlers[prefix] {
-                return handler.handle(query: queryPart)
+        // Check for alias match first - add alias command
+        if let aliasedCommand = aliases[trimmed.lowercased()] {
+            results.append(aliasedCommand)
+            addedIds.insert(aliasedCommand.id)
+        }
+
+        // Filter all commands by searchable text (including the original command)
+        let lowerQuery = trimmed.lowercased()
+        for command in allCommands {
+            if addedIds.contains(command.id) { continue }
+
+            if command.searchableText.contains(lowerQuery) ||
+               command.title.lowercased().contains(lowerQuery) {
+                results.append(command)
+                addedIds.insert(command.id)
             }
         }
 
-        // Check for aliases first
-        if let aliasedCommand = aliases[trimmed.lowercased()] {
-            return [aliasedCommand]
-        }
+        // Always append web search command at the end
+        let webSearchCommand = WebSearchCommand(query: trimmed)
+        results.append(webSearchCommand)
 
-        // Filter all commands by searchable text
-        let lowerQuery = trimmed.lowercased()
-        return allCommands.filter { command in
-            command.searchableText.contains(lowerQuery) ||
-            command.title.lowercased().contains(lowerQuery)
-        }
+        return results
     }
 
     // MARK: - Batch Registration
@@ -75,63 +74,40 @@ final class CommandRegistry: ObservableObject {
             register(cmd)
         }
     }
-    
-}
 
-// MARK: - Prefix Handler Protocol
+    func registerAppSettings() {
+        let settingsCommand = AppSettingsCommand(page: .settings)
+        register(settingsCommand)
 
-protocol PrefixHandler {
-    func handle(query: String) -> [any Command]
-}
+        let aliasesCommand = AppSettingsCommand(page: .aliases)
+        register(aliasesCommand)
 
-// MARK: - Built-in Prefix Handlers
-
-/// Handler for browser-based prefixes (git:, jira:, etc.)
-struct BrowserPrefixHandler: PrefixHandler {
-    let name: String
-    let baseURL: String
-    let icon: NSImage?
-
-    func handle(query: String) -> [any Command] {
-        guard !query.isEmpty else {
-            // Return a placeholder command
-            return [BrowserCommand(
-                name: "Open \(name)",
-                baseURL: baseURL,
-                icon: icon
-            )]
-        }
-
-        return [BrowserCommand(
-            name: "\(name): \(query)",
-            baseURL: baseURL,
-            query: query,
-            icon: icon
-        )]
+        let scriptsCommand = AppSettingsCommand(page: .scripts)
+        register(scriptsCommand)
     }
-}
 
-/// Handler for script-based prefixes
-struct ScriptPrefixHandler: PrefixHandler {
-    let name: String
-    let scriptContent: String
-    let icon: NSImage?
-
-    func handle(query: String) -> [any Command] {
-        guard !query.isEmpty else {
-            // Return a placeholder command to show it's available
-            return [ScriptCommand(
-                name: "\(name) <query>",
-                script: scriptContent,
-                icon: icon
-            )]
+    func registerSystemCommands() {
+        let actions: [SystemCommand.Action] = [.sleep, .restart, .shutdown, .emptyTrash, .displaySleep]
+        for action in actions {
+            let command = SystemCommand(action: action)
+            register(command)
         }
+    }
 
-        return [DynamicScriptCommand(
-            name: name,
-            script: scriptContent,
-            query: query,
-            icon: icon
-        )]
+    func reregisterAliases() {
+        // Remove all existing alias commands
+        allCommands.removeAll { $0.type == .alias }
+        aliases.removeAll()
+
+        // Re-register from AliasManager
+        AliasManager.shared.registerAllAliases()
+    }
+
+    func reregisterScripts() {
+        // Remove all existing script commands
+        allCommands.removeAll { $0.type == .script }
+
+        // Re-register from ScriptManager
+        ScriptManager.shared.registerAllScripts()
     }
 }

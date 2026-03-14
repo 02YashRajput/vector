@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -9,6 +10,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PanelManager.shared.show()
 
         HotkeyManager.shared.registerFromDefaults()
+        registerLaunchAtLoginFromDefaults()
+    }
+
+    private func registerLaunchAtLoginFromDefaults() {
+        let launchAtStartup = UserDefaults.standard.bool(forKey: "launch_at_startup")
+
+        if #available(macOS 13.0, *) {
+            do {
+                if launchAtStartup {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                print("Failed to \(launchAtStartup ? "register" : "unregister") launch at login: \(error)")
+            }
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

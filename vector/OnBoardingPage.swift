@@ -121,9 +121,6 @@ struct OnBoardingPage: View {
             .padding(.bottom, 32)
         }
         .frame(width: 700, height: 560)
-        .onAppear {
-            PanelManager.shared.centerOnScreen(size: NSSize(width: 700, height: 560))
-        }
         .onDisappear {
             stopCapturing()
         }

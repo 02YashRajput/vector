@@ -59,8 +59,9 @@ final class WebSearchCommand: BaseCommand {
 
         super.init(
             id: "search.\(query)",
-            title: "Search \"\(query)\"",
+            title: "Search for \"\(query)\"",
             subtitle: "Google",
+            icon: NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil),
             type: .browser
         )
     }

@@ -8,22 +8,30 @@ final class AppSettingsCommand: BaseCommand {
 
     enum AppPage: String {
         case settings = "settings"
+        case aliases = "aliases"
+        case scripts = "scripts"
 
         var displayName: String {
             switch self {
             case .settings: return "Settings"
+            case .aliases: return "Aliases"
+            case .scripts: return "Scripts and Commands"
             }
         }
 
         var subtitle: String {
             switch self {
             case .settings: return "Open Vector settings"
+            case .aliases: return "Create command shortcuts"
+            case .scripts: return "Run shell scripts and commands"
             }
         }
 
         var iconName: String {
             switch self {
             case .settings: return "gearshape.fill"
+            case .aliases: return "arrow.forward.circle.fill"
+            case .scripts: return "terminal.fill"
             }
         }
     }

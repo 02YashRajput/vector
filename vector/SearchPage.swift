@@ -72,6 +72,17 @@ struct SearchPage: View {
             // Initialize commands if empty
             if commandRegistry.allCommands.isEmpty {
                 commandRegistry.registerApplications(from: AppManager.shared)
+                commandRegistry.registerAppSettings()
+                commandRegistry.registerSystemCommands()
+                // Load saved aliases
+                AliasManager.shared.registerAllAliases()
+                // Load saved scripts
+                ScriptManager.shared.registerAllScripts()
+            }
+
+            // Focus search bar when page appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                isSearchFocused = true
             }
 
             escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -128,14 +139,16 @@ struct SearchPage: View {
     }
 
     private func executeSelectedCommand() {
-        if !filteredCommands.isEmpty, selectedIndex < filteredCommands.count {
-            let command = filteredCommands[selectedIndex]
-            command.execute()
-        } else if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
-            let webSearchCommand = WebSearchCommand(query: searchText)
-            webSearchCommand.execute()
+        guard !filteredCommands.isEmpty, selectedIndex < filteredCommands.count else { return }
+
+        let command = filteredCommands[selectedIndex]
+        command.execute()
+
+        // Don't hide panel for app settings commands (internal navigation)
+        if command.type != .appSettings {
+            PanelManager.shared.hide()
         }
-        PanelManager.shared.hide()
+
         searchText = ""
         selectedIndex = 0
     }
