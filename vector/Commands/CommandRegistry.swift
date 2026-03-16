@@ -27,6 +27,10 @@ final class CommandRegistry: ObservableObject {
 
     // MARK: - Query / Search
 
+    func getCommand(byId id: String) -> (any Command)? {
+        allCommands.first { $0.id == id }
+    }
+
     func search(query: String) -> [any Command] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
@@ -84,6 +88,9 @@ final class CommandRegistry: ObservableObject {
 
         let scriptsCommand = AppSettingsCommand(page: .scripts)
         register(scriptsCommand)
+
+        let projectsCommand = AppSettingsCommand(page: .projects)
+        register(projectsCommand)
     }
 
     func registerSystemCommands() {
@@ -104,10 +111,12 @@ final class CommandRegistry: ObservableObject {
     }
 
     func reregisterScripts() {
-        // Remove all existing script commands
         allCommands.removeAll { $0.type == .script }
-
-        // Re-register from ScriptManager
         ScriptManager.shared.registerAllScripts()
+    }
+
+    func reregisterProjects() {
+        allCommands.removeAll { $0.type == .project }
+        ProjectManager.shared.registerAllProjects()
     }
 }

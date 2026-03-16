@@ -11,6 +11,7 @@ struct SettingsPage: View {
     @State private var launchAtStartup: Bool = false
     @State private var keyMonitor: Any?
     @State private var escMonitor: Any?
+    @State private var clickOutsideMonitor: Any?
     @State private var showHotkeySaved: Bool = false
     @State private var preferredBrowser: String?
     @State private var installedBrowsers: [(name: String, bundleId: String, icon: NSImage?)] = []
@@ -72,7 +73,7 @@ struct SettingsPage: View {
                                             .foregroundColor(isCapturing ? .white : .primary)
                                             .cornerRadius(6)
                                     }
-                                    .buttonStyle(PlainButtonStyle())
+                                    .buttonStyle(.cursor)
                                 }
                             }
                             .padding(12)
@@ -251,7 +252,7 @@ struct SettingsPage: View {
                             .background(Color(.windowBackgroundColor).opacity(0.5))
                             .cornerRadius(8)
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .buttonStyle(.cursor)
                     }
 
                     // Scripts Section
@@ -274,7 +275,7 @@ struct SettingsPage: View {
                             .background(Color(.windowBackgroundColor).opacity(0.5))
                             .cornerRadius(8)
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .buttonStyle(.cursor)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -285,13 +286,15 @@ struct SettingsPage: View {
         .onAppear {
             loadCurrentSettings()
 
-            // ESC key monitor to go back to search
             escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                if event.keyCode == 53 && !isCapturing { // ESC key
+                if event.keyCode == 53 && !isCapturing {
                     page = .search
                     return nil
                 }
                 return event
+            }
+            clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+                PanelManager.shared.hide()
             }
         }
         .onDisappear {
@@ -299,6 +302,10 @@ struct SettingsPage: View {
             if let monitor = escMonitor {
                 NSEvent.removeMonitor(monitor)
                 escMonitor = nil
+            }
+            if let monitor = clickOutsideMonitor {
+                NSEvent.removeMonitor(monitor)
+                clickOutsideMonitor = nil
             }
         }
     }

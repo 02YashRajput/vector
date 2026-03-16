@@ -2,8 +2,6 @@ import Foundation
 import AppKit
 import Combine
 
-// MARK: - Script Types
-
 enum ScriptMode: String, Codable {
     case scriptFile = "script_file"
     case inlineScript = "inline_script"
@@ -38,12 +36,14 @@ struct ScriptItem: Codable, Identifiable {
     let id: UUID
     var name: String
     var mode: ScriptMode
-    var scriptPath: String?        // For scriptFile mode
-    var inlineScript: String?      // For inlineScript mode
-    var executablePath: String?    // For command mode
-    var arguments: String?         // For command mode
+    var scriptPath: String?
+    var inlineScript: String?
+    var executablePath: String?
+    var arguments: String?
+    var acceptsQuery: Bool
+    var isInternal: Bool
 
-    init(id: UUID = UUID(), name: String, mode: ScriptMode, scriptPath: String? = nil, inlineScript: String? = nil, executablePath: String? = nil, arguments: String? = nil) {
+    init(id: UUID = UUID(), name: String, mode: ScriptMode, scriptPath: String? = nil, inlineScript: String? = nil, executablePath: String? = nil, arguments: String? = nil, acceptsQuery: Bool = false, isInternal: Bool = false) {
         self.id = id
         self.name = name
         self.mode = mode
@@ -51,10 +51,28 @@ struct ScriptItem: Codable, Identifiable {
         self.inlineScript = inlineScript
         self.executablePath = executablePath
         self.arguments = arguments
+        self.acceptsQuery = acceptsQuery
+        self.isInternal = isInternal
+    }
+
+    func subtitle(showAcceptsHint: Bool = false) -> String {
+        let base: String
+        switch mode {
+        case .scriptFile:
+            base = scriptPath ?? ""
+        case .inlineScript:
+            let lines = inlineScript?.components(separatedBy: .newlines) ?? []
+            base = lines.first ?? "Inline script"
+        case .command:
+            let args = arguments ?? ""
+            base = "\(executablePath ?? "") \(args)".trimmingCharacters(in: .whitespaces)
+        }
+        if showAcceptsHint && base.isEmpty {
+            return "Accepts arguments"
+        }
+        return base
     }
 }
-
-// MARK: - Script Manager
 
 class ScriptManager: ObservableObject {
     static let shared = ScriptManager()
@@ -107,106 +125,135 @@ class ScriptManager: ObservableObject {
     }
 
     private func registerScript(_ script: ScriptItem) {
+        if script.isInternal {
+            return
+        }
         let command = ScriptCommand(script: script)
         CommandRegistry.shared.register(command)
     }
-}
 
-// MARK: - Script Command
+    func getScript(byId id: UUID) -> ScriptItem? {
+        scripts.first { $0.id == id }
+    }
+
+    func getCommand(forScriptId id: UUID) -> ScriptCommand? {
+        CommandRegistry.shared.getCommand(byId: "script.\(id.uuidString)") as? ScriptCommand
+    }
+}
 
 final class ScriptCommand: BaseCommand {
     let scriptItem: ScriptItem
 
     init(script: ScriptItem) {
         self.scriptItem = script
-
         super.init(
             id: "script.\(script.id.uuidString)",
             title: script.name,
-            subtitle: Self.scriptSubtitle(for: script),
+            subtitle: script.subtitle(showAcceptsHint: script.acceptsQuery),
             icon: NSImage(systemSymbolName: "terminal.fill", accessibilityDescription: nil),
-            type: .script
+            type: .script,
+            acceptsArguments: script.acceptsQuery
         )
     }
 
-    private static func scriptSubtitle(for script: ScriptItem) -> String {
-        switch script.mode {
-        case .scriptFile:
-            return script.scriptPath ?? ""
-        case .inlineScript:
-            let lines = script.inlineScript?.components(separatedBy: .newlines) ?? []
-            return lines.first ?? "Inline script"
-        case .command:
-            let args = script.arguments ?? ""
-            return "\(script.executablePath ?? "") \(args)".trimmingCharacters(in: .whitespaces)
-        }
+    override func execute(withArgument argument: String) {
+        let args = scriptItem.acceptsQuery ? parseArguments(argument) : []
+        executeScript(arguments: args, completion: nil)
     }
 
-    override func execute() {
+    func execute(withArgument argument: String, completion: @escaping (Result<String, Error>) -> Void) {
+        let args = scriptItem.acceptsQuery ? parseArguments(argument) : []
+        executeScript(arguments: args, completion: completion)
+    }
+
+    private func executeScript(arguments: [String], completion: ((Result<String, Error>) -> Void)?) {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = pipe
+
         switch scriptItem.mode {
         case .scriptFile:
-            executeScriptFile()
+            guard let path = scriptItem.scriptPath else {
+                completion?(.failure(NSError(domain: "ScriptCommand", code: 1, userInfo: [NSLocalizedDescriptionKey: "No script path"])))
+                return
+            }
+            var args = ["-l", path]
+            args.append(contentsOf: arguments)
+            task.arguments = args
+
         case .inlineScript:
-            executeInlineScript()
+            guard let script = scriptItem.inlineScript else {
+                completion?(.failure(NSError(domain: "ScriptCommand", code: 1, userInfo: [NSLocalizedDescriptionKey: "No inline script"])))
+                return
+            }
+            var args = ["-l", "-c", script]
+            if !arguments.isEmpty {
+                args.append(contentsOf: arguments)
+            }
+            task.arguments = args
+
         case .command:
-            executeCommand()
+            guard let executable = scriptItem.executablePath else {
+                completion?(.failure(NSError(domain: "ScriptCommand", code: 1, userInfo: [NSLocalizedDescriptionKey: "No executable path"])))
+                return
+            }
+            var command = executable
+            if let existingArgs = scriptItem.arguments, !existingArgs.isEmpty {
+                let parsedArgs = parseArguments(existingArgs)
+                command += " " + parsedArgs.joined(separator: " ")
+            }
+            if !arguments.isEmpty {
+                command += " " + arguments.joined(separator: " ")
+            }
+            task.arguments = ["-l", "-c", command]
         }
-    }
 
-    private func executeScriptFile() {
-        guard let path = scriptItem.scriptPath else { return }
-
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/bash")
-        task.arguments = ["-l", path]
-
-        do {
-            try task.run()
-        } catch {
-            print("Failed to execute script file: \(error)")
-        }
-    }
-
-    private func executeInlineScript() {
-        guard let script = scriptItem.inlineScript else { return }
-
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/bash")
-        task.arguments = ["-l", "-c", script]
-
-        do {
-            try task.run()
-        } catch {
-            print("Failed to execute inline script: \(error)")
-        }
-    }
-
-    private func executeCommand() {
-        guard let executable = scriptItem.executablePath else { return }
-
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: executable)
-
-        if let args = scriptItem.arguments, !args.isEmpty {
-            let parsedArgs = parseArguments(args)
-            task.arguments = parsedArgs
+        if let completion = completion {
+            task.terminationHandler = { _ in
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                DispatchQueue.main.async {
+                    completion(.success(output))
+                }
+            }
         }
 
         do {
             try task.run()
         } catch {
-            print("Failed to execute command: \(error)")
+            if let completion = completion {
+                DispatchQueue.main.async {
+                    completion(.failure(error))
+                }
+            } else {
+                print("Failed to execute script: \(error)")
+            }
         }
     }
-    func parseArguments(_ input: String) -> [String] {
+
+    private func parseArguments(_ input: String) -> [String] {
         var args: [String] = []
         var current = ""
         var inQuotes = false
+        var quoteChar: Character?
 
         for char in input {
             switch char {
-            case "\"":
-                inQuotes.toggle()
+            case "\"", "'", "`":
+                if inQuotes {
+                    if char == quoteChar {
+                        inQuotes = false
+                        quoteChar = nil
+                    } else {
+                        current.append(char)
+                    }
+                } else {
+                    inQuotes = true
+                    quoteChar = char
+                }
 
             case " " where !inQuotes:
                 if !current.isEmpty {

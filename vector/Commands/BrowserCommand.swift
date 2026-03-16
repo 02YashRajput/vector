@@ -21,7 +21,7 @@ final class BrowserCommand: BaseCommand {
         )
     }
 
-    override func execute() {
+    override func execute(withArgument argument: String) {
         var urlString = baseURL
 
         if let query = query {
@@ -66,7 +66,7 @@ final class WebSearchCommand: BaseCommand {
         )
     }
 
-    override func execute() {
+    override func execute(withArgument argument: String) {
         let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
         let urlString = Self.searchURL + encodedQuery
 

@@ -8,6 +8,7 @@ struct ScriptsPage: View {
     @State private var showCreateSheet = false
     @State private var editingScript: ScriptItem?
     @State private var escMonitor: Any?
+    @State private var clickOutsideMonitor: Any?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,7 +36,7 @@ struct ScriptsPage: View {
                     .background(Color.accentColor)
                     .cornerRadius(6)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(.cursor)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -67,7 +68,7 @@ struct ScriptsPage: View {
                             .background(Color.accentColor)
                             .cornerRadius(8)
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .buttonStyle(.cursor)
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
@@ -101,17 +102,24 @@ struct ScriptsPage: View {
         }
         .onAppear {
             escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                if event.keyCode == 53 { // ESC
+                if event.keyCode == 53 {
                     page = .search
                     return nil
                 }
                 return event
+            }
+            clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+                PanelManager.shared.hide()
             }
         }
         .onDisappear {
             if let monitor = escMonitor {
                 NSEvent.removeMonitor(monitor)
                 escMonitor = nil
+            }
+            if let monitor = clickOutsideMonitor {
+                NSEvent.removeMonitor(monitor)
+                clickOutsideMonitor = nil
             }
         }
     }
@@ -137,8 +145,20 @@ struct ScriptRowView: View {
 
             // Content
             VStack(alignment: .leading, spacing: 4) {
-                Text(script.name)
-                    .font(.system(size: 16, weight: .semibold))
+                HStack(spacing: 6) {
+                    Text(script.name)
+                        .font(.system(size: 16, weight: .semibold))
+
+                    if script.acceptsQuery {
+                        Text("dynamic")
+                            .font(.system(size: 10, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.15))
+                            .cornerRadius(4)
+                            .foregroundColor(.accentColor)
+                    }
+                }
 
                 Text(scriptSubtitle)
                     .font(.system(size: 12))
@@ -164,14 +184,14 @@ struct ScriptRowView: View {
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(.cursor)
 
                 Button(action: { ScriptManager.shared.deleteScript(script) }) {
                     Image(systemName: "trash")
                         .font(.system(size: 14))
                         .foregroundColor(.red.opacity(0.7))
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(.cursor)
             }
         }
         .padding(.horizontal, 16)
@@ -198,6 +218,9 @@ struct ScriptRowView: View {
 struct ScriptEditorSheet: View {
     let mode: ScriptMode?
     let editingScript: ScriptItem?
+    let sheetTitle: String?
+    let isInternalScript: Bool
+    let allowArgumentsOption: Bool
     let onSave: (ScriptItem) -> Void
 
     @State private var scriptName: String = ""
@@ -206,12 +229,16 @@ struct ScriptEditorSheet: View {
     @State private var inlineScript: String = ""
     @State private var executablePath: String = ""
     @State private var arguments: String = ""
+    @State private var acceptsQuery: Bool = false
 
     @Environment(\.dismiss) private var dismiss
 
-    init(mode: ScriptMode?, editingScript: ScriptItem? = nil, onSave: @escaping (ScriptItem) -> Void) {
+    init(mode: ScriptMode? = nil, editingScript: ScriptItem? = nil, sheetTitle: String? = nil, isInternalScript: Bool = false, allowArgumentsOption: Bool = true, onSave: @escaping (ScriptItem) -> Void) {
         self.mode = mode
         self.editingScript = editingScript
+        self.sheetTitle = sheetTitle
+        self.isInternalScript = isInternalScript
+        self.allowArgumentsOption = allowArgumentsOption
         self.onSave = onSave
 
         if let script = editingScript {
@@ -221,6 +248,7 @@ struct ScriptEditorSheet: View {
             _inlineScript = State(initialValue: script.inlineScript ?? "")
             _executablePath = State(initialValue: script.executablePath ?? "")
             _arguments = State(initialValue: script.arguments ?? "")
+            _acceptsQuery = State(initialValue: script.acceptsQuery)
         } else {
             _selectedMode = State(initialValue: mode ?? .inlineScript)
         }
@@ -228,9 +256,8 @@ struct ScriptEditorSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
-                Text(editingScript == nil ? "Create Script" : "Edit Script")
+                Text(headerTitle)
                     .font(.system(size: 18, weight: .semibold))
                 Spacer()
                 Button(action: { dismiss() }) {
@@ -238,7 +265,7 @@ struct ScriptEditorSheet: View {
                         .font(.system(size: 20))
                         .foregroundColor(.secondary)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(.cursor)
             }
             .padding(20)
             .background(Color(.windowBackgroundColor))
@@ -247,7 +274,6 @@ struct ScriptEditorSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Name
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Name")
                             .font(.system(size: 13, weight: .semibold))
@@ -262,7 +288,26 @@ struct ScriptEditorSheet: View {
                             .cornerRadius(8)
                     }
 
-                    // Mode Selection
+                    if allowArgumentsOption {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Accepts Arguments")
+                                    .font(.system(size: 14))
+                                Text("Pass dynamic arguments when running this script")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: $acceptsQuery)
+                                .toggleStyle(.switch)
+                        }
+                        .padding(12)
+                        .background(Color(.windowBackgroundColor).opacity(0.5))
+                        .cornerRadius(8)
+                    }
+
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Mode")
                             .font(.system(size: 13, weight: .semibold))
@@ -277,7 +322,6 @@ struct ScriptEditorSheet: View {
                         }
                     }
 
-                    // Mode-specific fields
                     switch selectedMode {
                     case .scriptFile:
                         ScriptFileFields(scriptPath: $scriptPath)
@@ -286,6 +330,7 @@ struct ScriptEditorSheet: View {
                     case .command:
                         CommandFields(executablePath: $executablePath, arguments: $arguments)
                     }
+                    
                 }
                 .padding(20)
             }
@@ -298,7 +343,7 @@ struct ScriptEditorSheet: View {
                 Button("Cancel") {
                     dismiss()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.cursor)
 
                 Button(action: saveScript) {
                     Text("Save")
@@ -309,12 +354,12 @@ struct ScriptEditorSheet: View {
                         .background(canSave ? Color.accentColor : Color.gray)
                         .cornerRadius(8)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(.cursor)
                 .disabled(!canSave)
             }
             .padding(20)
         }
-        .frame(width: 550, height: 550)
+        .frame(width: 550, height: 600)
     }
 
     private var canSave: Bool {
@@ -330,6 +375,13 @@ struct ScriptEditorSheet: View {
         }
     }
 
+    private var headerTitle: String {
+        if let title = sheetTitle {
+            return title
+        }
+        return editingScript == nil ? "Create Script" : "Edit Script"
+    }
+
     private func saveScript() {
         let script = ScriptItem(
             id: editingScript?.id ?? UUID(),
@@ -338,7 +390,9 @@ struct ScriptEditorSheet: View {
             scriptPath: selectedMode == .scriptFile ? scriptPath.trimmingCharacters(in: .whitespaces) : nil,
             inlineScript: selectedMode == .inlineScript ? inlineScript.trimmingCharacters(in: .whitespaces) : nil,
             executablePath: selectedMode == .command ? executablePath.trimmingCharacters(in: .whitespaces) : nil,
-            arguments: selectedMode == .command ? arguments.trimmingCharacters(in: .whitespaces) : nil
+            arguments: selectedMode == .command ? arguments.trimmingCharacters(in: .whitespaces) : nil,
+            acceptsQuery: isInternalScript ? false : acceptsQuery,
+            isInternal: isInternalScript
         )
 
         onSave(script)
@@ -368,7 +422,7 @@ struct ModeOptionButton: View {
                     .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.cursor)
     }
 }
 
@@ -395,7 +449,7 @@ struct ScriptFileFields: View {
                         .background(Color.secondary.opacity(0.2))
                         .cornerRadius(6)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(.cursor)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -470,7 +524,7 @@ struct CommandFields: View {
                             .background(Color.secondary.opacity(0.2))
                             .cornerRadius(6)
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .buttonStyle(.cursor)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)

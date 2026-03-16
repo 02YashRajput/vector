@@ -10,12 +10,14 @@ final class AppSettingsCommand: BaseCommand {
         case settings = "settings"
         case aliases = "aliases"
         case scripts = "scripts"
+        case projects = "projects"
 
         var displayName: String {
             switch self {
             case .settings: return "Settings"
             case .aliases: return "Aliases"
             case .scripts: return "Scripts and Commands"
+            case .projects: return "Projects"
             }
         }
 
@@ -24,6 +26,7 @@ final class AppSettingsCommand: BaseCommand {
             case .settings: return "Open Vector settings"
             case .aliases: return "Create command shortcuts"
             case .scripts: return "Run shell scripts and commands"
+            case .projects: return "Quick access to your projects"
             }
         }
 
@@ -32,6 +35,7 @@ final class AppSettingsCommand: BaseCommand {
             case .settings: return "gearshape.fill"
             case .aliases: return "arrow.forward.circle.fill"
             case .scripts: return "terminal.fill"
+            case .projects: return "folder.fill"
             }
         }
     }
@@ -48,7 +52,7 @@ final class AppSettingsCommand: BaseCommand {
         )
     }
 
-    override func execute() {
+    override func execute(withArgument argument: String) {
         // Post notification to change page in RootView
         NotificationCenter.default.post(
             name: .changePage,

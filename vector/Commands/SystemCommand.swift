@@ -51,7 +51,7 @@ final class SystemCommand: BaseCommand {
 
     // MARK: - Execute
 
-    override func execute() {
+    override func execute(withArgument argument: String) {
         switch action {
         case .sleep:
             putToSleep()

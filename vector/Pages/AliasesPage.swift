@@ -2,87 +2,13 @@ import SwiftUI
 import AppKit
 import Combine
 
-struct AliasItem: Codable, Identifiable {
-    let id: UUID
-    let commandId: String
-    let alias: String
-
-    init(id: UUID = UUID(), commandId: String, alias: String) {
-        self.id = id
-        self.commandId = commandId
-        self.alias = alias
-    }
-}
-
-class AliasManager: ObservableObject {
-    static let shared = AliasManager()
-
-    @Published var aliases: [AliasItem] = []
-
-    private let userDefaultsKey = "saved_aliases"
-
-    private init() {
-        loadAliases()
-    }
-
-    func loadAliases() {
-        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              let decoded = try? JSONDecoder().decode([AliasItem].self, from: data) else {
-            return
-        }
-        aliases = decoded
-    }
-
-    func saveAliases() {
-        guard let data = try? JSONEncoder().encode(aliases) else { return }
-        UserDefaults.standard.set(data, forKey: userDefaultsKey)
-    }
-
-    func addAlias(commandId: String, alias: String) -> Bool {
-        let trimmedAlias = alias.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !trimmedAlias.isEmpty else { return false }
-
-        // Check if alias already exists
-        if aliases.contains(where: { $0.alias == trimmedAlias }) {
-            return false
-        }
-
-        let newAlias = AliasItem(commandId: commandId, alias: trimmedAlias)
-        aliases.append(newAlias)
-        saveAliases()
-
-        // Register in CommandRegistry
-        registerAlias(newAlias)
-        return true
-    }
-
-    func deleteAlias(_ alias: AliasItem) {
-        aliases.removeAll { $0.id == alias.id }
-        saveAliases()
-
-        // Re-register all aliases to update CommandRegistry
-        CommandRegistry.shared.reregisterAliases()
-    }
-
-    func registerAllAliases() {
-        for alias in aliases {
-            registerAlias(alias)
-        }
-    }
-
-    private func registerAlias(_ alias: AliasItem) {
-        let registry = CommandRegistry.shared
-        guard let command = registry.allCommands.first(where: { $0.id == alias.commandId }) else { return }
-        registry.register(alias: alias.alias, for: command)
-    }
-}
-
 struct AliasesPage: View {
     @Binding var page: Page
     @StateObject private var aliasManager = AliasManager.shared
     @StateObject private var commandRegistry = CommandRegistry.shared
     @State private var showCreateSheet = false
     @State private var escMonitor: Any?
+    @State private var clickOutsideMonitor: Any?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -110,7 +36,7 @@ struct AliasesPage: View {
                     .background(Color.accentColor)
                     .cornerRadius(6)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(.cursor)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -142,7 +68,7 @@ struct AliasesPage: View {
                             .background(Color.accentColor)
                             .cornerRadius(8)
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .buttonStyle(.cursor)
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
@@ -174,17 +100,24 @@ struct AliasesPage: View {
         }
         .onAppear {
             escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                if event.keyCode == 53 { // ESC
+                if event.keyCode == 53 {
                     page = .search
                     return nil
                 }
                 return event
+            }
+            clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+                PanelManager.shared.hide()
             }
         }
         .onDisappear {
             if let monitor = escMonitor {
                 NSEvent.removeMonitor(monitor)
                 escMonitor = nil
+            }
+            if let monitor = clickOutsideMonitor {
+                NSEvent.removeMonitor(monitor)
+                clickOutsideMonitor = nil
             }
         }
     }
@@ -256,7 +189,7 @@ struct AliasRowView: View {
                     .foregroundColor(.red.opacity(0.7))
                     .frame(width: 32, height: 32)
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(.cursor)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -305,7 +238,7 @@ struct CreateAliasSheet: View {
                         .font(.system(size: 20))
                         .foregroundColor(.secondary)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(.cursor)
             }
             .padding(20)
             .background(Color(.windowBackgroundColor))
@@ -404,7 +337,7 @@ struct CreateAliasSheet: View {
                             .background(selectedCommandId != nil && !aliasText.trimmingCharacters(in: .whitespaces).isEmpty ? Color.accentColor : Color.gray)
                             .cornerRadius(8)
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .buttonStyle(.cursor)
                     .disabled(selectedCommandId == nil || aliasText.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }

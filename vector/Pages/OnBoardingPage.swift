@@ -11,6 +11,7 @@ struct OnBoardingPage: View {
     @State private var isCapturing: Bool = false
     @State private var launchAtStartup: Bool = true
     @State private var keyMonitor: Any?
+    @State private var clickOutsideMonitor: Any?
 
     private var isHotkeySet: Bool {
         !hotkeyDisplay.isEmpty
@@ -69,7 +70,7 @@ struct OnBoardingPage: View {
                                     .foregroundColor(.secondary)
                                     .font(.system(size: 16))
                             }
-                            .buttonStyle(PlainButtonStyle())
+                            .buttonStyle(.cursor)
                         }
                     }
                     .padding(.horizontal, 14)
@@ -115,14 +116,23 @@ struct OnBoardingPage: View {
                 .foregroundColor(isHotkeySet ? .white : .secondary)
                 .cornerRadius(10)
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(.cursor)
             .disabled(!isHotkeySet)
             .padding(.horizontal, 40)
             .padding(.bottom, 32)
         }
         .frame(width: 700, height: 560)
+        .onAppear {
+            clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+                PanelManager.shared.hide()
+            }
+        }
         .onDisappear {
             stopCapturing()
+            if let monitor = clickOutsideMonitor {
+                NSEvent.removeMonitor(monitor)
+                clickOutsideMonitor = nil
+            }
         }
     }
 

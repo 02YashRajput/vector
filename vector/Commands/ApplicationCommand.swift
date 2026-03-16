@@ -18,7 +18,7 @@ final class ApplicationCommand: BaseCommand {
         )
     }
 
-    override func execute() {
+    override func execute(withArgument argument: String) {
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, error in
             if let error = error {
                 print("Failed to launch \(self.title): \(error)")

@@ -9,7 +9,13 @@ protocol Command: Identifiable, Hashable {
     var icon: NSImage? { get }
     var type: CommandType { get }
 
-    /// Execute the command
+    /// Whether this command accepts dynamic arguments (prefix:query format)
+    var acceptsArguments: Bool { get }
+
+    /// Execute the command with an optional argument
+    func execute(withArgument argument: String)
+
+    /// Execute the command (default implementation calls execute with empty argument)
     func execute()
 
     /// Get searchable text for filtering
@@ -18,6 +24,11 @@ protocol Command: Identifiable, Hashable {
 
 extension Command {
     var searchableText: String { title.lowercased() }
+    var acceptsArguments: Bool { false }
+
+    func execute() {
+        execute(withArgument: "")
+    }
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
@@ -36,6 +47,7 @@ enum CommandType: String, CaseIterable {
     case system
     case alias
     case appSettings
+    case project
 
     var displayName: String {
         switch self {
@@ -46,6 +58,7 @@ enum CommandType: String, CaseIterable {
         case .system: return "System"
         case .alias: return "Alias"
         case .appSettings: return "Settings"
+        case .project: return "Project"
         }
     }
 
@@ -58,6 +71,7 @@ enum CommandType: String, CaseIterable {
         case .system: return "gearshape.fill"
         case .alias: return "arrow.forward.circle.fill"
         case .appSettings: return "gearshape.2.fill"
+        case .project: return "folder.fill"
         }
     }
 }
@@ -69,16 +83,18 @@ class BaseCommand: Command, ObservableObject {
     let subtitle: String?
     let icon: NSImage?
     let type: CommandType
+    let acceptsArguments: Bool
 
-    init(id: String, title: String, subtitle: String? = nil, icon: NSImage? = nil, type: CommandType) {
+    init(id: String, title: String, subtitle: String? = nil, icon: NSImage? = nil, type: CommandType, acceptsArguments: Bool = false) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.icon = icon
         self.type = type
+        self.acceptsArguments = acceptsArguments
     }
 
-    func execute() {
+    func execute(withArgument argument: String) {
         // Override in subclasses
     }
 }
