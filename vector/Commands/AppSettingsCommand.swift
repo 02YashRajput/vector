@@ -12,6 +12,7 @@ final class AppSettingsCommand: BaseCommand {
         case scripts = "scripts"
         case projects = "projects"
         case quickLinks = "quickLinks"
+        case prefixes = "prefixes"
 
         var displayName: String {
             switch self {
@@ -20,6 +21,7 @@ final class AppSettingsCommand: BaseCommand {
             case .scripts: return "Scripts and Commands"
             case .projects: return "Projects"
             case .quickLinks: return "Quick Links"
+            case .prefixes: return "Prefixes"
             }
         }
 
@@ -30,6 +32,7 @@ final class AppSettingsCommand: BaseCommand {
             case .scripts: return "Run shell scripts and commands"
             case .projects: return "Quick access to your projects"
             case .quickLinks: return "Open bookmarked URLs in browser"
+            case .prefixes: return "Keyword triggers with input"
             }
         }
 
@@ -40,6 +43,7 @@ final class AppSettingsCommand: BaseCommand {
             case .scripts: return "terminal.fill"
             case .projects: return "folder.fill"
             case .quickLinks: return "link"
+            case .prefixes: return "text.cursor"
             }
         }
     }

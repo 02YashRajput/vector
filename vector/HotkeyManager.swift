@@ -26,14 +26,15 @@ final class HotkeyManager {
                   let modifiersRaw = entry["modifiers"] as? Int else { continue }
             let modifiers = NSEvent.ModifierFlags(rawValue: UInt(modifiersRaw))
             let filterStr = entry["filter"] as? String
-            let action = Self.buildAction(filter: filterStr)
+            let prefixCommandId = entry["prefixCommandId"] as? String
+            let action = Self.buildAction(filter: filterStr, prefixCommandId: prefixCommandId)
             registerInternal(name: name, keyCode: UInt32(keyCode), modifiers: modifiers, action: action)
         }
     }
 
     /// Register a hotkey and persist it. Single call to set up everything.
-    func set(name: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags, display: String, filter: CommandType? = nil) {
-        let action = Self.buildAction(filter: filter?.rawValue)
+    func set(name: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags, display: String, filter: CommandType? = nil, prefixCommandId: String? = nil) {
+        let action = Self.buildAction(filter: filter?.rawValue, prefixCommandId: prefixCommandId)
         let success = registerInternal(name: name, keyCode: UInt32(keyCode), modifiers: modifiers, action: action)
 
         guard success else { return }
@@ -46,6 +47,7 @@ final class HotkeyManager {
             "display": display
         ]
         if let filter { entry["filter"] = filter.rawValue }
+        if let prefixCommandId { entry["prefixCommandId"] = prefixCommandId }
         configs[name] = entry
         UserDefaults.standard.set(configs, forKey: Self.defaultsKey)
     }
@@ -129,7 +131,10 @@ final class HotkeyManager {
         return id
     }
 
-    static func buildAction(filter filterStr: String?) -> () -> Void {
+    static func buildAction(filter filterStr: String?, prefixCommandId: String? = nil) -> () -> Void {
+        if let prefixCommandId {
+            return { DispatchQueue.main.async { PanelManager.shared.showWithPrefix(commandId: prefixCommandId) } }
+        }
         let filterType: CommandType? = filterStr.flatMap { CommandType(rawValue: $0) }
         return { DispatchQueue.main.async { PanelManager.shared.toggle(filterType: filterType) } }
     }

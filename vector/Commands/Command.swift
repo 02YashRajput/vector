@@ -49,6 +49,7 @@ enum CommandType: String, CaseIterable {
     case appSettings
     case project
     case quickLink
+    case prefix
 
     var displayName: String {
         switch self {
@@ -61,6 +62,7 @@ enum CommandType: String, CaseIterable {
         case .appSettings: return "Settings"
         case .project: return "Project"
         case .quickLink: return "Quick Link"
+        case .prefix: return "Prefix"
         }
     }
 
@@ -75,6 +77,7 @@ enum CommandType: String, CaseIterable {
         case .appSettings: return "gearshape.2.fill"
         case .project: return "folder.fill"
         case .quickLink: return "link"
+        case .prefix: return "text.cursor"
         }
     }
 }

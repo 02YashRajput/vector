@@ -86,6 +86,9 @@ final class CommandRegistry: ObservableObject {
 
         let quickLinksCommand = AppSettingsCommand(page: .quickLinks)
         register(quickLinksCommand)
+
+        let prefixesCommand = AppSettingsCommand(page: .prefixes)
+        register(prefixesCommand)
     }
 
     func registerSystemCommands() {
@@ -123,5 +126,10 @@ final class CommandRegistry: ObservableObject {
     func reregisterQuickLinks() {
         allCommands.removeAll { $0.type == .quickLink }
         QuickLinkManager.shared.registerAllQuickLinks()
+    }
+
+    func reregisterPrefixes() {
+        allCommands.removeAll { $0.type == .prefix }
+        PrefixManager.shared.registerAllPrefixes()
     }
 }

@@ -9,6 +9,7 @@ final class PanelManager: ObservableObject {
     @Published var isKeyAndVisible = false
     /// nil means show all commands; a CommandType value filters to that type only
     @Published var commandTypeFilter: CommandType? = nil
+    @Published var pendingPrefixCommandId: String? = nil
 
     private init() {}
 
@@ -57,6 +58,12 @@ final class PanelManager: ObservableObject {
         panel.orderOut(nil)
         isKeyAndVisible = false
         commandTypeFilter = nil
+        pendingPrefixCommandId = nil
+    }
+
+    func showWithPrefix(commandId: String) {
+        pendingPrefixCommandId = commandId
+        show()
     }
 
     func toggle(filterType: CommandType? = nil) {

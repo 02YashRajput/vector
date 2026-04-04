@@ -165,6 +165,7 @@ struct SearchPage: View {
                 ScriptManager.shared.registerAllScripts()
                 ProjectManager.shared.registerAllProjects()
                 QuickLinkManager.shared.registerAllQuickLinks()
+                PrefixManager.shared.registerAllPrefixes()
             }
 
             // Focus search bar when page appears
@@ -201,7 +202,11 @@ struct SearchPage: View {
             if newValue {
                 searchText = ""
                 selectedIndex = 0
-                if let filter = panelManager.commandTypeFilter {
+                if let prefixCommandId = panelManager.pendingPrefixCommandId,
+                   let command = commandRegistry.getCommand(byId: prefixCommandId) {
+                    mode = .argument(command)
+                    panelManager.pendingPrefixCommandId = nil
+                } else if let filter = panelManager.commandTypeFilter {
                     mode = .filtered(filter)
                 } else {
                     mode = .normal
