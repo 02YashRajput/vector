@@ -27,6 +27,8 @@
 
 # Build products
 build/
+.build/
+*.zip
 DerivedData/
 
 # SwiftPM
