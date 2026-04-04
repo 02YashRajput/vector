@@ -1,5 +1,26 @@
 import SwiftUI
 
+enum SearchMode {
+    case normal
+    case filtered(CommandType)
+    case argument(any Command)
+
+    var isArgument: Bool {
+        if case .argument = self { return true }
+        return false
+    }
+
+    var argumentCommand: (any Command)? {
+        if case .argument(let cmd) = self { return cmd }
+        return nil
+    }
+
+    var filterType: CommandType? {
+        if case .filtered(let type) = self { return type }
+        return nil
+    }
+}
+
 struct SearchPage: View {
     @Binding var page: Page
     @FocusState private var isSearchFocused: Bool
@@ -7,34 +28,47 @@ struct SearchPage: View {
     @State private var clickOutsideMonitor: Any?
     @State private var searchText: String = ""
     @State private var selectedIndex: Int = 0
-    @State private var argumentModeCommand: (any Command)? = nil
+    @State private var mode: SearchMode = .normal
     @StateObject private var panelManager = PanelManager.shared
     @StateObject private var commandRegistry = CommandRegistry.shared
 
     private var filteredCommands: [any Command] {
-        // Don't show filtered commands when in argument mode
-        if argumentModeCommand != nil {
-            return []
+        if mode.isArgument { return [] }
+        let results = commandRegistry.search(query: searchText)
+        if let filterType = mode.filterType {
+            return results.filter { $0.type == filterType }
         }
-        return commandRegistry.search(query: searchText)
+        return results
     }
 
     var body: some View {
         VStack(spacing: 0) {
             // Search bar
             HStack(spacing: 16) {
-                if argumentModeCommand != nil {
-                    // Show the command name as a badge when in argument mode
-                    Text("\(argumentModeCommand!.title):")
+                switch mode {
+                case .argument(let command):
+                    Text("\(command.title):")
                         .font(.system(size: 20, weight: .medium))
                         .foregroundColor(.accentColor)
-                } else {
+                case .filtered(let filterType):
+                    HStack(spacing: 6) {
+                        Image(systemName: filterType.iconName)
+                            .font(.system(size: 16))
+                        Text(filterType.displayName)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(.accentColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.accentColor.opacity(0.12))
+                    .cornerRadius(6)
+                case .normal:
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 22, weight: .regular))
                         .foregroundColor(.secondary)
                 }
 
-                TextField(argumentModeCommand != nil ? "Enter argument..." : "Search apps, commands...", text: $searchText)
+                TextField(searchPlaceholder, text: $searchText)
                     .textFieldStyle(PlainTextFieldStyle())
                     .font(.system(size: 20))
                     .frame(height: 36)
@@ -60,31 +94,28 @@ struct SearchPage: View {
                 .padding(.horizontal, 12)
 
             // Results list or argument mode hint
-            if argumentModeCommand != nil {
-                // Show hint for argument mode
+            if case .argument(let command) = mode {
                 VStack(spacing: 12) {
                     Spacer()
-                    if let command = argumentModeCommand {
-                        HStack(spacing: 12) {
-                            if let icon = command.icon {
-                                Image(nsImage: icon)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 32, height: 32)
-                            } else {
-                                Image(systemName: command.type.iconName)
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.accentColor)
-                            }
+                    HStack(spacing: 12) {
+                        if let icon = command.icon {
+                            Image(nsImage: icon)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 32, height: 32)
+                        } else {
+                            Image(systemName: command.type.iconName)
+                                .font(.system(size: 24))
+                                .foregroundColor(.accentColor)
+                        }
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(command.title)
-                                    .font(.system(size: 16, weight: .medium))
-                                if let subtitle = command.subtitle {
-                                    Text(subtitle)
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary)
-                                }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(command.title)
+                                .font(.system(size: 16, weight: .medium))
+                            if let subtitle = command.subtitle {
+                                Text(subtitle)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
                             }
                         }
                     }
@@ -127,7 +158,7 @@ struct SearchPage: View {
         .frame(width: 700, height: 400)
         .onAppear {
             if commandRegistry.allCommands.isEmpty {
-                commandRegistry.registerApplications(from: AppManager.shared)
+                commandRegistry.registerApplications()
                 commandRegistry.registerAppSettings()
                 commandRegistry.registerSystemCommands()
                 AliasManager.shared.registerAllAliases()
@@ -142,14 +173,17 @@ struct SearchPage: View {
 
             escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.keyCode == 53 {
-                    // ESC key
-                    if argumentModeCommand != nil {
-                        // Exit argument mode
-                        argumentModeCommand = nil
+                    switch mode {
+                    case .argument:
+                        mode = .normal
                         searchText = ""
-                        return nil
+                    case .filtered:
+                        mode = .normal
+                        searchText = ""
+                        selectedIndex = 0
+                    case .normal:
+                        PanelManager.shared.hide()
                     }
-                    PanelManager.shared.hide()
                     return nil
                 }
                 if handleKeyEvent(event) {
@@ -158,11 +192,19 @@ struct SearchPage: View {
                 return event
             }
             clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+                guard NSApp.modalWindow == nil else { return }
                 PanelManager.shared.hide()
             }
         }
         .onChange(of: panelManager.isKeyAndVisible) { oldValue, newValue in
             if newValue {
+                searchText = ""
+                selectedIndex = 0
+                if let filter = panelManager.commandTypeFilter {
+                    mode = .filtered(filter)
+                } else {
+                    mode = .normal
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     isSearchFocused = true
                 }
@@ -183,17 +225,17 @@ struct SearchPage: View {
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
         switch event.keyCode {
         case 126: // Up arrow
-            if argumentModeCommand == nil && selectedIndex > 0 {
+            if !mode.isArgument && selectedIndex > 0 {
                 selectedIndex -= 1
             }
             return true
         case 125: // Down arrow
-            if argumentModeCommand == nil && selectedIndex < filteredCommands.count - 1 {
+            if !mode.isArgument && selectedIndex < filteredCommands.count - 1 {
                 selectedIndex += 1
             }
             return true
         case 36: // Return/Enter
-            if argumentModeCommand != nil {
+            if mode.isArgument {
                 executeWithArgument()
             } else {
                 handleCommandSelection(filteredCommands[selectedIndex])
@@ -208,14 +250,11 @@ struct SearchPage: View {
         guard !filteredCommands.isEmpty, selectedIndex < filteredCommands.count else { return }
 
         if command.acceptsArguments {
-            // Enter argument mode
-            argumentModeCommand = command
+            mode = .argument(command)
             searchText = ""
         } else {
-            // Execute immediately
             command.execute()
 
-            // Don't hide panel for app settings commands (internal navigation)
             if command.type != .appSettings {
                 PanelManager.shared.hide()
             }
@@ -226,15 +265,22 @@ struct SearchPage: View {
     }
 
     private func executeWithArgument() {
-        guard let command = argumentModeCommand else { return }
+        guard let command = mode.argumentCommand else { return }
 
         command.execute(withArgument: searchText.trimmingCharacters(in: .whitespaces))
 
-        // Reset state
-        argumentModeCommand = nil
+        mode = .normal
         searchText = ""
         selectedIndex = 0
         PanelManager.shared.hide()
+    }
+
+    private var searchPlaceholder: String {
+        switch mode {
+        case .argument: return "Enter argument..."
+        case .filtered(let type): return "Search \(type.displayName.lowercased())s..."
+        case .normal: return "Search apps, commands..."
+        }
     }
 }
 

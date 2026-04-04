@@ -10,6 +10,7 @@ struct OnBoardingPage: View {
     @State private var hotkeyKeyCode: UInt16 = 0
     @State private var isCapturing: Bool = false
     @State private var launchAtStartup: Bool = true
+    @State private var importVSCodeProjects: Bool = true
     @State private var keyMonitor: Any?
     @State private var clickOutsideMonitor: Any?
 
@@ -125,6 +126,24 @@ struct OnBoardingPage: View {
                 .padding(12)
                 .background(Color(.windowBackgroundColor).opacity(0.5))
                 .cornerRadius(8)
+
+                // Import VS Code projects toggle
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Import VS Code projects")
+                            .font(.system(size: 13))
+                        Text("Discover and register projects from VS Code workspaces")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $importVSCodeProjects)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+                .padding(12)
+                .background(Color(.windowBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
             }
             .padding(.horizontal, 32)
             .padding(.top, 20)
@@ -150,9 +169,10 @@ struct OnBoardingPage: View {
             .padding(.horizontal, 32)
             .padding(.bottom, 28)
         }
-        .frame(width: 700, height: 560)
+        .frame(width: 700, height: 600)
         .onAppear {
             clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+                guard NSApp.modalWindow == nil else { return }
                 PanelManager.shared.hide()
             }
         }
@@ -207,24 +227,74 @@ struct OnBoardingPage: View {
 
 
     private func completeOnboarding() {
-        registerHotkey()
+        HotkeyManager.shared.set(name: "global", keyCode: hotkeyKeyCode, modifiers: hotkeyModifiers, display: hotkeyDisplay)
 
         setLaunchAtLogin(enabled: launchAtStartup)
 
-        let hotkeyConfig: [String: Any] = [
-            "display": hotkeyDisplay,
-            "keycode": Int(hotkeyKeyCode),
-            "modifiers": Int(hotkeyModifiers.rawValue)
-        ]
-        UserDefaults.standard.set(hotkeyConfig, forKey: "hotkey_config")
         UserDefaults.standard.set(launchAtStartup, forKey: "launch_at_startup")
+        UserDefaults.standard.set(importVSCodeProjects, forKey: "import_vscode_projects")
         UserDefaults.standard.set(true, forKey: "is_onboarding_complete")
+
+        if importVSCodeProjects {
+            discoverAndRegisterVSCodeProjects()
+        }
 
         page = .search
     }
 
-    private func registerHotkey() {
-        HotkeyManager.shared.register(keyCode: UInt32(hotkeyKeyCode), modifiers: hotkeyModifiers)
+    private func discoverAndRegisterVSCodeProjects() {
+        let discoveryScript = ScriptItem(
+            name: "VS Code Projects",
+            mode: .inlineScript,
+            inlineScript: "grep -rho '\"folder\": *\"file://[^\"]*' ~/Library/Application\\ Support/Code/User/workspaceStorage/*/workspace.json 2>/dev/null | sed 's/\"folder\": *\"file:\\/\\///' | grep '/Users' | while read -r line; do printf '%b\\n' \"$line\"; done",
+            isInternal: true
+        )
+
+        ScriptManager.shared.addScript(discoveryScript)
+
+        // Resolve VS Code application
+        guard let vscodeURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.microsoft.VSCode") else {
+            print("VS Code not found")
+            return
+        }
+
+        let openMethod = ProjectOpenMethod.application(
+            bundleIdentifier: "com.microsoft.VSCode",
+            name: "Visual Studio Code",
+            url: vscodeURL
+        )
+
+        // Create a project group for VS Code
+        let group = ProjectGroup(
+            name: "VS Code Projects",
+            openMethod: openMethod,
+            discoveryScriptId: discoveryScript.id,
+            editable: false
+        )
+        ProjectManager.shared.addGroup(group)
+
+        let command = ScriptCommand(script: discoveryScript)
+        command.execute(withArgument: "") { result in
+            guard case .success(let output) = result else { return }
+
+            let paths = output
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .map { $0.removingPercentEncoding ?? $0 }
+                .filter { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) }
+
+            guard !paths.isEmpty else { return }
+
+            DispatchQueue.main.async {
+                for path in paths {
+                    let project = Project(
+                        path: path,
+                        groupId: group.id
+                    )
+                    _ = ProjectManager.shared.addProject(project)
+                }
+            }
+        }
     }
 
     private func setLaunchAtLogin(enabled: Bool) {

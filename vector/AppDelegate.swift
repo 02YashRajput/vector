@@ -11,6 +11,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         HotkeyManager.shared.registerFromDefaults()
         registerLaunchAtLoginFromDefaults()
+
+        // Start periodic project refresh & path validation
+        ProjectManager.shared.startPeriodicTimers()
+
+        // Start periodic application refresh
+        ApplicationManager.shared.startPeriodicTimer()
     }
 
     private func registerLaunchAtLoginFromDefaults() {

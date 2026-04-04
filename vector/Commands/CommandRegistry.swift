@@ -67,16 +67,8 @@ final class CommandRegistry: ObservableObject {
 
     // MARK: - Batch Registration
 
-    func registerApplications(from appManager: AppManager) {
-        for app in appManager.apps {
-            let cmd = ApplicationCommand(
-                name: app.name,
-                bundleIdentifier: app.bundleIdentifier,
-                icon: app.icon,
-                url: app.url
-            )
-            register(cmd)
-        }
+    func registerApplications() {
+        ApplicationManager.shared.registerAllApplications()
     }
 
     func registerAppSettings() {
@@ -118,5 +110,10 @@ final class CommandRegistry: ObservableObject {
     func reregisterProjects() {
         allCommands.removeAll { $0.type == .project }
         ProjectManager.shared.registerAllProjects()
+    }
+
+    func reregisterApplications() {
+        allCommands.removeAll { $0.type == .application }
+        ApplicationManager.shared.registerAllApplications()
     }
 }

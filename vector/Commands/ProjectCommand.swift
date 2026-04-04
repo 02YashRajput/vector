@@ -2,17 +2,7 @@ import Foundation
 import AppKit
 import Combine
 
-enum ProjectSource: String, Codable {
-    case manual
-    case script
-
-    var displayName: String {
-        switch self {
-        case .manual: return "Manual"
-        case .script: return "Script"
-        }
-    }
-}
+// MARK: - Open Method
 
 enum ProjectOpenMethod: Codable {
     case application(bundleIdentifier: String, name: String, url: URL)
@@ -26,42 +16,9 @@ enum ProjectOpenMethod: Codable {
     }
 }
 
-struct Project: Codable, Identifiable {
-    let id: UUID
-    var path: String
-    var source: ProjectSource
-    var openMethod: ProjectOpenMethod
-    var discoveryScriptId: UUID?
-
-    init(id: UUID = UUID(), path: String, source: ProjectSource, openMethod: ProjectOpenMethod, discoveryScriptId: UUID? = nil) {
-        self.id = id
-        self.path = path
-        self.source = source
-        self.openMethod = openMethod
-        self.discoveryScriptId = discoveryScriptId
-    }
-
-    var name: String {
-        URL(fileURLWithPath: path).lastPathComponent
-    }
-
-    var exists: Bool {
-        FileManager.default.fileExists(atPath: path)
-    }
-
-    var isDirectory: Bool {
-        var isDir: ObjCBool = false
-        return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
-    }
-}
-
 extension ProjectOpenMethod {
     enum CodingKeys: String, CodingKey {
-        case type
-        case bundleIdentifier
-        case name
-        case url
-        case commandId
+        case type, bundleIdentifier, name, url, commandId
     }
 
     init(from decoder: Decoder) throws {
@@ -84,7 +41,6 @@ extension ProjectOpenMethod {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-
         switch self {
         case .application(let bundleIdentifier, let name, let url):
             try container.encode("application", forKey: .type)
@@ -98,71 +54,240 @@ extension ProjectOpenMethod {
     }
 }
 
+// MARK: - Project
+
+struct Project: Codable, Identifiable {
+    let id: UUID
+    var path: String
+    var groupId: UUID
+    var openMethodOverride: ProjectOpenMethod?
+    var active: Bool
+
+    init(id: UUID = UUID(), path: String, groupId: UUID, openMethodOverride: ProjectOpenMethod? = nil, active: Bool = true) {
+        self.id = id
+        self.path = path
+        self.groupId = groupId
+        self.openMethodOverride = openMethodOverride
+        self.active = active
+    }
+
+    var name: String {
+        URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    var exists: Bool {
+        FileManager.default.fileExists(atPath: path)
+    }
+
+    var isDirectory: Bool {
+        var isDir: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
+    }
+
+    /// Resolved open method: per-project override or fall back to group default
+    func resolvedOpenMethod(fallback: ProjectOpenMethod) -> ProjectOpenMethod {
+        openMethodOverride ?? fallback
+    }
+}
+
+// MARK: - Project Group
+
+struct ProjectGroup: Codable, Identifiable {
+    let id: UUID
+    var name: String
+    var openMethod: ProjectOpenMethod
+    var discoveryScriptId: UUID?
+    var editable: Bool
+
+    /// True if this is the built-in manual group
+    var isManual: Bool { discoveryScriptId == nil }
+
+    init(id: UUID = UUID(), name: String, openMethod: ProjectOpenMethod, discoveryScriptId: UUID? = nil, editable: Bool = true) {
+        self.id = id
+        self.name = name
+        self.openMethod = openMethod
+        self.discoveryScriptId = discoveryScriptId
+        self.editable = editable
+    }
+}
+
+// MARK: - Project Manager
+
 class ProjectManager: ObservableObject {
     static let shared = ProjectManager()
 
+    @Published var groups: [ProjectGroup] = []
     @Published var projects: [Project] = []
 
-    private let userDefaultsKey = "saved_projects"
+    private let groupsKey = "saved_project_groups"
+    private let projectsKey = "saved_projects_v2"
+    private var refreshTimer: Timer?
+    private var validationTimer: Timer?
+
+    private let refreshInterval: TimeInterval = 5 * 60
+    private let validationInterval: TimeInterval = 5 * 60
 
     private init() {
-        loadProjects()
+        load()
+        ensureManualGroup()
     }
 
-    func loadProjects() {
-        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              let decoded = try? JSONDecoder().decode([Project].self, from: data) else {
-            return
+    // MARK: - Manual Group
+
+    /// The default "Manual" group — always exists. Lazily created on first access.
+    var manualGroup: ProjectGroup {
+        groups.first { $0.isManual }!
+    }
+
+    private func ensureManualGroup() {
+        if !groups.contains(where: { $0.isManual }) {
+            let defaultOpenMethod = ProjectOpenMethod.application(
+                bundleIdentifier: "com.apple.finder",
+                name: "Finder",
+                url: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app")
+            )
+            let group = ProjectGroup(name: "Manual", openMethod: defaultOpenMethod, discoveryScriptId: nil)
+            groups.insert(group, at: 0)
+            save()
         }
-        projects = decoded
     }
 
-    func saveProjects() {
-        guard let data = try? JSONEncoder().encode(projects) else { return }
-        UserDefaults.standard.set(data, forKey: userDefaultsKey)
+    // MARK: - Persistence
+
+    func load() {
+        if let data = UserDefaults.standard.data(forKey: groupsKey),
+           let decoded = try? JSONDecoder().decode([ProjectGroup].self, from: data) {
+            groups = decoded
+        }
+        if let data = UserDefaults.standard.data(forKey: projectsKey),
+           let decoded = try? JSONDecoder().decode([Project].self, from: data) {
+            projects = decoded
+        }
+    }
+
+    func save() {
+        if let data = try? JSONEncoder().encode(groups) {
+            UserDefaults.standard.set(data, forKey: groupsKey)
+        }
+        if let data = try? JSONEncoder().encode(projects) {
+            UserDefaults.standard.set(data, forKey: projectsKey)
+        }
+    }
+
+    // MARK: - Periodic Timers
+
+    func startPeriodicTimers() {
+        stopPeriodicTimers()
+
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+            DispatchQueue.global(qos: .utility).async {
+                self?.refreshScriptGroups()
+            }
+        }
+
+        validationTimer = Timer.scheduledTimer(withTimeInterval: validationInterval, repeats: true) { [weak self] _ in
+            self?.validateProjectPaths()
+        }
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.refreshScriptGroups()
+        }
+        validateProjectPaths()
+    }
+
+    func stopPeriodicTimers() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        validationTimer?.invalidate()
+        validationTimer = nil
+    }
+
+    /// Validates all project paths: deactivates missing ones, reactivates restored ones.
+    func validateProjectPaths() {
+        var changed = false
+        for i in projects.indices {
+            let pathExists = projects[i].exists
+            if projects[i].active && !pathExists {
+                projects[i].active = false
+                changed = true
+            } else if !projects[i].active && pathExists {
+                projects[i].active = true
+                changed = true
+            }
+        }
+        guard changed else { return }
+
+        DispatchQueue.main.async {
+            self.save()
+            CommandRegistry.shared.reregisterProjects()
+        }
+    }
+
+    // MARK: - Group CRUD
+
+    func addGroup(_ group: ProjectGroup) {
+        groups.append(group)
+        save()
+    }
+
+    func updateGroup(_ group: ProjectGroup) {
+        guard let index = groups.firstIndex(where: { $0.id == group.id }) else { return }
+        groups[index] = group
+        save()
+        CommandRegistry.shared.reregisterProjects()
+    }
+
+    func deleteGroup(_ group: ProjectGroup) {
+        guard !group.isManual else { return }
+        projects.removeAll { $0.groupId == group.id }
+        groups.removeAll { $0.id == group.id }
+
+        if let scriptId = group.discoveryScriptId,
+           let script = ScriptManager.shared.getScript(byId: scriptId),
+           script.isInternal {
+            ScriptManager.shared.deleteScript(script)
+        }
+
+        save()
+        CommandRegistry.shared.reregisterProjects()
+    }
+
+    func getGroup(byId id: UUID) -> ProjectGroup? {
+        groups.first { $0.id == id }
+    }
+
+    // MARK: - Project CRUD
+
+    func projects(inGroup groupId: UUID) -> [Project] {
+        projects.filter { $0.groupId == groupId }
     }
 
     func addProject(_ project: Project) -> Bool {
         guard project.exists && project.isDirectory else { return false }
 
         if let existingIndex = projects.firstIndex(where: { $0.path == project.path }) {
-            let existing = projects[existingIndex]
-            if existing.source == .manual && project.source == .script {
-                return false
-            }
             projects[existingIndex] = project
         } else {
             projects.append(project)
         }
 
-        saveProjects()
+        save()
         registerProject(project)
         return true
     }
 
     func deleteProject(_ project: Project) {
         projects.removeAll { $0.id == project.id }
-        saveProjects()
+        save()
         CommandRegistry.shared.reregisterProjects()
     }
 
     func updateProject(_ project: Project) {
         if let index = projects.firstIndex(where: { $0.id == project.id }) {
             projects[index] = project
-            saveProjects()
+            save()
             CommandRegistry.shared.reregisterProjects()
         }
-    }
-
-    func registerAllProjects() {
-        for project in projects {
-            registerProject(project)
-        }
-    }
-
-    private func registerProject(_ project: Project) {
-        let command = ProjectCommand(project: project)
-        CommandRegistry.shared.register(command)
     }
 
     func getProject(byId id: UUID) -> Project? {
@@ -173,20 +298,34 @@ class ProjectManager: ObservableObject {
         projects.first { $0.path == path }
     }
 
-    func refreshScriptProjects() {
-        var allDiscoveredPaths: Set<String> = []
-        var scriptIdsToProcess: [UUID] = []
+    // MARK: - Registration
 
-        for project in projects where project.source == .script && project.discoveryScriptId != nil {
-            scriptIdsToProcess.append(project.discoveryScriptId!)
+    func registerAllProjects() {
+        for project in projects where project.active {
+            registerProject(project)
         }
+    }
 
-        scriptIdsToProcess = Array(Set(scriptIdsToProcess))
+    private func registerProject(_ project: Project) {
+        guard let group = getGroup(byId: project.groupId) else { return }
+        let openMethod = project.resolvedOpenMethod(fallback: group.openMethod)
+        let command = ProjectCommand(project: project, openMethod: openMethod)
+        CommandRegistry.shared.register(command)
+    }
 
-        for scriptId in scriptIdsToProcess {
-            guard let script = ScriptManager.shared.getScript(byId: scriptId) else { continue }
+    // MARK: - Script Group Refresh
+
+    func refreshScriptGroups() {
+        let scriptGroups = groups.filter { $0.discoveryScriptId != nil }
+        guard !scriptGroups.isEmpty else { return }
+
+        var allResults: [(UUID, [String])] = []
+
+        for group in scriptGroups {
+            guard let scriptId = group.discoveryScriptId,
+                  let script = ScriptManager.shared.getScript(byId: scriptId) else { continue }
+
             let command = ScriptCommand(script: script)
-
             let semaphore = DispatchSemaphore(value: 0)
             var discoveredPaths: [String] = []
 
@@ -201,32 +340,75 @@ class ProjectManager: ObservableObject {
             }
 
             semaphore.wait()
+            allResults.append((group.id, discoveredPaths))
+        }
 
-            for path in discoveredPaths {
-                allDiscoveredPaths.insert(path)
-                if !projects.contains(where: { $0.path == path }) {
-                    if let originalProject = projects.first(where: { $0.discoveryScriptId == scriptId }) {
-                        let newProject = Project(
-                            path: path,
-                            source: .script,
-                            openMethod: originalProject.openMethod,
-                            discoveryScriptId: scriptId
-                        )
-                        projects.append(newProject)
+        DispatchQueue.main.async {
+            for (groupId, paths) in allResults {
+                let pathSet = Set(paths)
+                let existingPaths = Set(self.projects(inGroup: groupId).map { $0.path })
+
+                // Add new projects
+                for path in paths where !existingPaths.contains(path) {
+                    let project = Project(path: path, groupId: groupId)
+                    if project.exists && project.isDirectory {
+                        self.projects.append(project)
                     }
                 }
+
+                // Remove stale projects
+                self.projects.removeAll { $0.groupId == groupId && !pathSet.contains($0.path) }
+            }
+
+            self.save()
+            CommandRegistry.shared.reregisterProjects()
+        }
+    }
+
+    /// Refresh a single script group by its ID
+    func refreshGroup(_ groupId: UUID, completion: ((Bool) -> Void)? = nil) {
+        guard let group = getGroup(byId: groupId),
+              let scriptId = group.discoveryScriptId,
+              let script = ScriptManager.shared.getScript(byId: scriptId) else {
+            completion?(false)
+            return
+        }
+
+        let command = ScriptCommand(script: script)
+        command.execute(withArgument: "") { result in
+            DispatchQueue.main.async {
+                guard case .success(let output) = result else {
+                    completion?(false)
+                    return
+                }
+
+                let paths = output
+                    .components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) }
+
+                let pathSet = Set(paths)
+                let existingPaths = Set(self.projects(inGroup: groupId).map { $0.path })
+
+                // Remove stale
+                self.projects.removeAll { $0.groupId == groupId && !pathSet.contains($0.path) }
+
+                // Add new
+                for path in paths where !existingPaths.contains(path) {
+                    let project = Project(path: path, groupId: groupId)
+                    if project.exists && project.isDirectory {
+                        self.projects.append(project)
+                    }
+                }
+
+                self.save()
+                CommandRegistry.shared.reregisterProjects()
+                completion?(true)
             }
         }
-
-        projects.removeAll { project in
-            project.source == .script &&
-            project.discoveryScriptId != nil &&
-            !allDiscoveredPaths.contains(project.path)
-        }
-
-        saveProjects()
-        CommandRegistry.shared.reregisterProjects()
     }
+
+    // MARK: - Utilities
 
     static func getApplications(for path: String) -> [(name: String, bundleIdentifier: String, url: URL)] {
         let url = URL(fileURLWithPath: path)
@@ -244,26 +426,35 @@ class ProjectManager: ObservableObject {
     }
 }
 
+// MARK: - Project Command
+
 final class ProjectCommand: BaseCommand {
     let project: Project
+    let openMethod: ProjectOpenMethod
 
-    init(project: Project) {
+    init(project: Project, openMethod: ProjectOpenMethod) {
         self.project = project
+        self.openMethod = openMethod
+        let folderIcon: NSImage? = {
+            guard let symbol = NSImage(systemSymbolName: "folder.fill", accessibilityDescription: nil) else { return nil }
+            let config = NSImage.SymbolConfiguration(paletteColors: [.systemBlue])
+            return symbol.withSymbolConfiguration(config)
+        }()
+
         super.init(
             id: "project.\(project.id.uuidString)",
             title: project.name,
             subtitle: project.path,
-            icon: NSImage(systemSymbolName: "folder.fill", accessibilityDescription: nil),
+            icon: folderIcon,
             type: .project,
             acceptsArguments: false
         )
     }
 
     override func execute(withArgument argument: String) {
-        switch project.openMethod {
+        switch openMethod {
         case .application(_, _, let url):
             openWithApplication(url: url)
-
         case .scriptCommand(let commandId):
             openWithScriptCommand(commandId: commandId)
         }
@@ -284,7 +475,6 @@ final class ProjectCommand: BaseCommand {
             print("ScriptCommand not found: \(commandId)")
             return
         }
-
         command.execute(withArgument: project.path, completion: { _ in })
     }
 }

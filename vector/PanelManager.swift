@@ -7,6 +7,8 @@ final class PanelManager: ObservableObject {
 
     private(set) var panel: FloatingPanel?
     @Published var isKeyAndVisible = false
+    /// nil means show all commands; a CommandType value filters to that type only
+    @Published var commandTypeFilter: CommandType? = nil
 
     private init() {}
 
@@ -38,9 +40,10 @@ final class PanelManager: ObservableObject {
         centerOnScreen(size: NSSize(width: 700, height: 400))
     }
 
-    func show() {
+    func show(filterType: CommandType? = nil) {
         guard let panel else { return }
 
+        commandTypeFilter = filterType
         NSApp.activate(ignoringOtherApps: true)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -53,14 +56,15 @@ final class PanelManager: ObservableObject {
         guard let panel else { return }
         panel.orderOut(nil)
         isKeyAndVisible = false
+        commandTypeFilter = nil
     }
 
-    func toggle() {
+    func toggle(filterType: CommandType? = nil) {
         guard let panel else { return }
         if panel.isVisible {
             hide()
         } else {
-            show()
+            show(filterType: filterType)
         }
     }
 

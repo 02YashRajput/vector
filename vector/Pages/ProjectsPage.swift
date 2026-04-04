@@ -2,14 +2,6 @@ import SwiftUI
 import AppKit
 import Combine
 
-// MARK: - Script Group Model
-
-private struct ScriptGroup: Identifiable {
-    let id: UUID
-    let script: ScriptItem?
-    let projects: [Project]
-}
-
 // MARK: - Projects Page
 
 struct ProjectsPage: View {
@@ -21,22 +13,24 @@ struct ProjectsPage: View {
     @State private var scriptToEdit: ScriptItem?
     @State private var escMonitor: Any?
     @State private var clickOutsideMonitor: Any?
-    @State private var refreshingScriptIds: Set<UUID> = []
+    @State private var refreshingGroupIds: Set<UUID> = []
 
-    private var manualProjects: [Project] {
-        projectManager.projects.filter { $0.source == .manual }
+    // Projects hotkey
+    @State private var projectsHotkeyDisplay: String = ""
+    @State private var projectsHotkeyModifiers: NSEvent.ModifierFlags = []
+    @State private var projectsHotkeyKeyCode: UInt16 = 0
+    @State private var isCapturingHotkey: Bool = false
+    @State private var hotkeyKeyMonitor: Any?
+    @State private var showHotkeySaved: Bool = false
+
+    private func projectsForGroup(_ group: ProjectGroup) -> [Project] {
+        projectManager.projects(inGroup: group.id)
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    private var scriptGroups: [ScriptGroup] {
-        let scriptProjects = projectManager.projects.filter { $0.source == .script && $0.discoveryScriptId != nil }
-        let grouped = Dictionary(grouping: scriptProjects) { $0.discoveryScriptId! }
-        return grouped.map { (scriptId, projects) in
-            ScriptGroup(
-                id: scriptId,
-                script: ScriptManager.shared.getScript(byId: scriptId),
-                projects: projects.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-            )
-        }.sorted { ($0.script?.name ?? "") < ($1.script?.name ?? "") }
+    private var scriptGroups: [ProjectGroup] {
+        projectManager.groups.filter { !$0.isManual }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     var body: some View {
@@ -66,6 +60,105 @@ struct ProjectsPage: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
             .background(Color(.windowBackgroundColor))
+
+            Divider()
+
+            // Projects Hotkey Row
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 14))
+                        .foregroundColor(.accentColor)
+                        .frame(width: 28, height: 28)
+                        .background(Color.accentColor.opacity(0.1))
+                        .cornerRadius(6)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Projects Hotkey")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("Open launcher filtered to projects only")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    if isCapturingHotkey {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 6, height: 6)
+                            Text("Press keys...")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.accentColor)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.accentColor.opacity(0.1))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.accentColor.opacity(0.4), lineWidth: 1)
+                        )
+                    } else if projectsHotkeyDisplay.isEmpty {
+                        Button(action: startCapturingHotkey) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 10, weight: .semibold))
+                                Text("Set Hotkey")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(.accentColor)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.accentColor.opacity(0.1))
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.cursor)
+                    } else {
+                        HStack(spacing: 8) {
+                            Text(projectsHotkeyDisplay)
+                                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color.accentColor.opacity(0.12))
+                                .cornerRadius(6)
+
+                            if showHotkeySaved {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.green)
+                                    .transition(.opacity)
+                            }
+
+                            Button(action: startCapturingHotkey) {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 24, height: 24)
+                                    .background(Color.secondary.opacity(0.12))
+                                    .cornerRadius(5)
+                            }
+                            .buttonStyle(.cursor)
+                            .help("Change hotkey")
+
+                            Button(action: clearProjectsHotkey) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(.red.opacity(0.7))
+                                    .frame(width: 24, height: 24)
+                                    .background(Color.red.opacity(0.08))
+                                    .cornerRadius(5)
+                            }
+                            .buttonStyle(.cursor)
+                            .help("Remove hotkey")
+                        }
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+            }
+            .background(Color(.controlBackgroundColor).opacity(0.3))
 
             Divider()
 
@@ -100,13 +193,14 @@ struct ProjectsPage: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         // Manual Projects Section
+                        let manualProjects = projectsForGroup(projectManager.manualGroup)
                         if !manualProjects.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                ProjectSectionHeader(title: "Manual", icon: "folder.fill", color: .green)
+                                ProjectSectionHeader(title: "Manual", icon: "folder.fill", color: .blue)
 
                                 VStack(spacing: 6) {
                                     ForEach(manualProjects) { project in
-                                        ProjectRow(project: project, onEdit: { editingProject = project })
+                                        ProjectRow(project: project, group: projectManager.manualGroup, onEdit: { editingProject = project })
                                     }
                                 }
                             }
@@ -114,15 +208,18 @@ struct ProjectsPage: View {
 
                         // Script Discovery Sections
                         ForEach(scriptGroups) { group in
+                            let groupProjects = projectsForGroup(group)
+                            let script = group.discoveryScriptId.flatMap { ScriptManager.shared.getScript(byId: $0) }
+
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack(spacing: 8) {
                                     ProjectSectionHeader(
-                                        title: group.script?.name ?? "Unknown Script",
+                                        title: group.name,
                                         icon: "terminal",
                                         color: .blue
                                     )
 
-                                    Text("\(group.projects.count)")
+                                    Text("\(groupProjects.count)")
                                         .font(.system(size: 10, weight: .bold))
                                         .foregroundColor(.blue)
                                         .padding(.horizontal, 6)
@@ -132,7 +229,7 @@ struct ProjectsPage: View {
 
                                     Spacer()
 
-                                    if refreshingScriptIds.contains(group.id) {
+                                    if refreshingGroupIds.contains(group.id) {
                                         ProgressView()
                                             .scaleEffect(0.6)
                                             .frame(width: 16, height: 16)
@@ -146,28 +243,30 @@ struct ProjectsPage: View {
                                         .help("Re-run discovery script")
                                     }
 
-                                    if group.script != nil {
-                                        Button(action: { scriptToEdit = group.script }) {
-                                            Image(systemName: "pencil")
+                                    if group.editable {
+                                        if script != nil {
+                                            Button(action: { scriptToEdit = script }) {
+                                                Image(systemName: "pencil")
+                                                    .font(.system(size: 11, weight: .semibold))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            .buttonStyle(.cursor)
+                                            .help("Edit discovery script")
+                                        }
+
+                                        Button(action: { deleteScriptGroup(group) }) {
+                                            Image(systemName: "trash")
                                                 .font(.system(size: 11, weight: .semibold))
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(.red.opacity(0.7))
                                         }
                                         .buttonStyle(.cursor)
-                                        .help("Edit discovery script")
+                                        .help("Remove all projects from this script")
                                     }
-
-                                    Button(action: { deleteScriptGroup(group.id) }) {
-                                        Image(systemName: "trash")
-                                            .font(.system(size: 11, weight: .semibold))
-                                            .foregroundColor(.red.opacity(0.7))
-                                    }
-                                    .buttonStyle(.cursor)
-                                    .help("Remove all projects from this script")
                                 }
 
                                 VStack(spacing: 6) {
-                                    ForEach(group.projects) { project in
-                                        ProjectRow(project: project, onEdit: { editingProject = project })
+                                    ForEach(groupProjects) { project in
+                                        ProjectRow(project: project, group: group, onEdit: { editingProject = project })
                                     }
                                 }
                             }
@@ -201,18 +300,21 @@ struct ProjectsPage: View {
             }
         }
         .onAppear {
+            loadProjectsHotkey()
             escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                if event.keyCode == 53 {
+                if event.keyCode == 53 && !isCapturingHotkey {
                     page = .search
                     return nil
                 }
                 return event
             }
             clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+                guard NSApp.modalWindow == nil else { return }
                 PanelManager.shared.hide()
             }
         }
         .onDisappear {
+            stopCapturingHotkey()
             if let monitor = escMonitor {
                 NSEvent.removeMonitor(monitor)
                 escMonitor = nil
@@ -224,59 +326,76 @@ struct ProjectsPage: View {
         }
     }
 
-    private func refreshScriptGroup(_ scriptId: UUID) {
-        guard let script = ScriptManager.shared.getScript(byId: scriptId) else { return }
-        let command = ScriptCommand(script: script)
-
-        refreshingScriptIds.insert(scriptId)
-
-        command.execute(withArgument: "") { result in
+    private func refreshScriptGroup(_ groupId: UUID) {
+        refreshingGroupIds.insert(groupId)
+        ProjectManager.shared.refreshGroup(groupId) { _ in
             DispatchQueue.main.async {
-                refreshingScriptIds.remove(scriptId)
-
-                guard case .success(let output) = result else { return }
-
-                let paths = output
-                    .components(separatedBy: .newlines)
-                    .map { $0.trimmingCharacters(in: .whitespaces) }
-                    .filter { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) }
-
-                let pathSet = Set(paths)
-                let pm = ProjectManager.shared
-                let existing = pm.projects.filter { $0.discoveryScriptId == scriptId }
-                let openMethod = existing.first?.openMethod ?? .application(
-                    bundleIdentifier: "com.apple.finder",
-                    name: "Finder",
-                    url: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app")
-                )
-
-                // Remove stale projects
-                pm.projects.removeAll { $0.discoveryScriptId == scriptId && !pathSet.contains($0.path) }
-
-                // Add new projects
-                let existingPaths = Set(pm.projects.map { $0.path })
-                for path in paths where !existingPaths.contains(path) {
-                    let project = Project(path: path, source: .script, openMethod: openMethod, discoveryScriptId: scriptId)
-                    if project.exists && project.isDirectory {
-                        pm.projects.append(project)
-                    }
-                }
-
-                pm.saveProjects()
-                CommandRegistry.shared.reregisterProjects()
+                refreshingGroupIds.remove(groupId)
             }
         }
     }
 
-    private func deleteScriptGroup(_ scriptId: UUID) {
-        let pm = ProjectManager.shared
-        pm.projects.removeAll { $0.discoveryScriptId == scriptId }
-        pm.saveProjects()
-        CommandRegistry.shared.reregisterProjects()
+    private func deleteScriptGroup(_ group: ProjectGroup) {
+        ProjectManager.shared.deleteGroup(group)
+    }
 
-        if let script = ScriptManager.shared.getScript(byId: scriptId), script.isInternal {
-            ScriptManager.shared.deleteScript(script)
+    // MARK: - Projects Hotkey
+
+    private func loadProjectsHotkey() {
+        if let config = HotkeyManager.shared.loadConfig(name: "projects") {
+            projectsHotkeyDisplay = config.display
+            projectsHotkeyKeyCode = UInt16(config.keyCode)
+            projectsHotkeyModifiers = NSEvent.ModifierFlags(rawValue: UInt(config.modifiers))
         }
+    }
+
+    private func startCapturingHotkey() {
+        isCapturingHotkey = true
+        showHotkeySaved = false
+        hotkeyKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
+            if event.type == .flagsChanged { return nil }
+            if event.type == .keyDown {
+                if event.keyCode == 53 {
+                    stopCapturingHotkey()
+                    return nil
+                }
+                let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+                guard !modifiers.isEmpty else { return nil }
+
+                projectsHotkeyModifiers = modifiers
+                projectsHotkeyKeyCode = event.keyCode
+                projectsHotkeyDisplay = HotkeyUtils.buildHotkeyString(modifiers: modifiers, keyCode: event.keyCode, separator: " + ")
+
+                saveProjectsHotkey()
+                stopCapturingHotkey()
+                return nil
+            }
+            return nil
+        }
+    }
+
+    private func stopCapturingHotkey() {
+        isCapturingHotkey = false
+        if let monitor = hotkeyKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            hotkeyKeyMonitor = nil
+        }
+    }
+
+    private func saveProjectsHotkey() {
+        HotkeyManager.shared.set(name: "projects", keyCode: projectsHotkeyKeyCode, modifiers: projectsHotkeyModifiers, display: projectsHotkeyDisplay, filter: .project)
+
+        withAnimation { showHotkeySaved = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation { showHotkeySaved = false }
+        }
+    }
+
+    private func clearProjectsHotkey() {
+        HotkeyManager.shared.remove(name: "projects")
+        projectsHotkeyDisplay = ""
+        projectsHotkeyKeyCode = 0
+        projectsHotkeyModifiers = []
     }
 }
 
@@ -303,18 +422,30 @@ private struct ProjectSectionHeader: View {
 
 private struct ProjectRow: View {
     let project: Project
+    let group: ProjectGroup
     let onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "folder.fill")
                 .font(.system(size: 16))
-                .foregroundColor(.accentColor)
+                .foregroundColor(project.active ? .blue : .gray)
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(project.name)
-                    .font(.system(size: 14, weight: .medium))
+                HStack(spacing: 6) {
+                    Text(project.name)
+                        .font(.system(size: 14, weight: .medium))
+                    if !project.active {
+                        Text("Inactive")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.orange.opacity(0.15))
+                            .cornerRadius(3)
+                    }
+                }
                 Text(project.path)
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
@@ -323,7 +454,7 @@ private struct ProjectRow: View {
 
             Spacer()
 
-            Text(project.openMethod.displayName)
+            Text(project.resolvedOpenMethod(fallback: group.openMethod).displayName)
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 8)
@@ -331,26 +462,29 @@ private struct ProjectRow: View {
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(4)
 
-            HStack(spacing: 6) {
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.cursor)
 
-                Button(action: { ProjectManager.shared.deleteProject(project) }) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 12))
-                        .foregroundColor(.red.opacity(0.7))
+                HStack(spacing: 6) {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.cursor)
+
+                    Button(action: { ProjectManager.shared.deleteProject(project) }) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12))
+                            .foregroundColor(.red.opacity(0.7))
+                    }
+                    .buttonStyle(.cursor)
                 }
-                .buttonStyle(.cursor)
-            }
+            
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color(.controlBackgroundColor).opacity(0.5))
+        .background(Color(.controlBackgroundColor).opacity(project.active ? 0.5 : 0.25))
         .cornerRadius(8)
+        .opacity(project.active ? 1.0 : 0.6)
     }
 }
 
@@ -619,7 +753,7 @@ struct CreateProjectSheet: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "folder.fill")
                                         .font(.system(size: 9))
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(.blue)
                                     Text(URL(fileURLWithPath: p).lastPathComponent)
                                         .font(.system(size: 11, weight: .medium))
                                         .lineLimit(1)
@@ -782,9 +916,15 @@ struct CreateProjectSheet: View {
             openMethod = .scriptCommand(commandId: selectedScriptCommandId)
         }
 
+        let pm = ProjectManager.shared
+
         if mode == .manual {
-            let project = Project(path: path, source: .manual, openMethod: openMethod)
-            _ = ProjectManager.shared.addProject(project)
+            let project = Project(path: path, groupId: pm.manualGroup.id)
+            // Update manual group's open method to match what user chose
+            var manualGroup = pm.manualGroup
+            manualGroup.openMethod = openMethod
+            pm.updateGroup(manualGroup)
+            _ = pm.addProject(project)
         } else {
             // Save the discovery script if new
             if let script = discoveryScriptItem {
@@ -793,14 +933,17 @@ struct CreateProjectSheet: View {
                 }
             }
 
+            // Create a new project group for this script
+            let group = ProjectGroup(
+                name: discoveryScriptItem?.name ?? "Discovery Script",
+                openMethod: openMethod,
+                discoveryScriptId: discoveryScriptItem?.id
+            )
+            pm.addGroup(group)
+
             for p in discoveredPaths {
-                let project = Project(
-                    path: p,
-                    source: .script,
-                    openMethod: openMethod,
-                    discoveryScriptId: discoveryScriptItem?.id
-                )
-                _ = ProjectManager.shared.addProject(project)
+                let project = Project(path: p, groupId: group.id)
+                _ = pm.addProject(project)
             }
         }
 
@@ -826,17 +969,25 @@ struct EditProjectSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    private var group: ProjectGroup? {
+        ProjectManager.shared.getGroup(byId: project.groupId)
+    }
+
     init(project: Project, onSave: @escaping (Project) -> Void) {
         self.project = project
         self.onSave = onSave
 
-        switch project.openMethod {
+        let resolvedMethod = project.openMethodOverride ?? ProjectManager.shared.getGroup(byId: project.groupId)?.openMethod
+        switch resolvedMethod {
         case .application:
             _openMethodType = State(initialValue: .application)
             _selectedScriptCommandId = State(initialValue: "")
         case .scriptCommand(let commandId):
             _openMethodType = State(initialValue: .scriptCommand)
             _selectedScriptCommandId = State(initialValue: commandId)
+        case .none:
+            _openMethodType = State(initialValue: .application)
+            _selectedScriptCommandId = State(initialValue: "")
         }
     }
 
@@ -865,22 +1016,24 @@ struct EditProjectSheet: View {
                 HStack(spacing: 12) {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(.blue)
                         .frame(width: 36, height: 36)
-                        .background(Color.accentColor.opacity(0.1))
+                        .background(Color.blue.opacity(0.1))
                         .cornerRadius(8)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(project.name)
                             .font(.system(size: 14, weight: .semibold))
 
-                        Text(project.source.displayName)
-                            .font(.system(size: 10, weight: .medium))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(project.source == .manual ? Color.green.opacity(0.12) : Color.blue.opacity(0.12))
-                            .cornerRadius(4)
-                            .foregroundColor(project.source == .manual ? .green : .blue)
+                        if let group = group {
+                            Text(group.name)
+                                .font(.system(size: 10, weight: .medium))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(group.isManual ? Color.green.opacity(0.12) : Color.blue.opacity(0.12))
+                                .cornerRadius(4)
+                                .foregroundColor(group.isManual ? .green : .blue)
+                        }
                     }
                 }
 
@@ -989,7 +1142,8 @@ struct EditProjectSheet: View {
         availableApps = ProjectManager.getApplications(for: project.path)
 
         // Pre-select current app
-        if case .application(let bundleId, _, _) = project.openMethod {
+        let resolvedMethod = project.openMethodOverride ?? group?.openMethod
+        if case .application(let bundleId, _, _) = resolvedMethod {
             if let idx = availableApps.firstIndex(where: { $0.bundleIdentifier == bundleId }) {
                 selectedAppIndex = idx
             }
@@ -1011,7 +1165,7 @@ struct EditProjectSheet: View {
         }
 
         var updated = project
-        updated.openMethod = openMethod
+        updated.openMethodOverride = openMethod
         onSave(updated)
     }
 }

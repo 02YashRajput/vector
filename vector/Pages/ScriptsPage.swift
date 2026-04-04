@@ -109,6 +109,7 @@ struct ScriptsPage: View {
                 return event
             }
             clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+                guard NSApp.modalWindow == nil else { return }
                 PanelManager.shared.hide()
             }
         }

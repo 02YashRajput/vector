@@ -254,6 +254,7 @@ struct SettingsPage: View {
                 return event
             }
             clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+                guard NSApp.modalWindow == nil else { return }
                 PanelManager.shared.hide()
             }
         }
@@ -272,13 +273,10 @@ struct SettingsPage: View {
 
     private func loadCurrentSettings() {
         // Load hotkey config
-        if let hotkeyConfig = UserDefaults.standard.dictionary(forKey: "hotkey_config"),
-           let display = hotkeyConfig["display"] as? String,
-           let keycode = hotkeyConfig["keycode"] as? Int,
-           let modifiers = hotkeyConfig["modifiers"] as? Int {
-            hotkeyDisplay = display
-            hotkeyKeyCode = UInt16(keycode)
-            hotkeyModifiers = NSEvent.ModifierFlags(rawValue: UInt(modifiers))
+        if let config = HotkeyManager.shared.loadConfig(name: "global") {
+            hotkeyDisplay = config.display
+            hotkeyKeyCode = UInt16(config.keyCode)
+            hotkeyModifiers = NSEvent.ModifierFlags(rawValue: UInt(config.modifiers))
         }
 
         // Load launch at startup
@@ -360,19 +358,7 @@ struct SettingsPage: View {
     }
 
     private func saveHotkey() {
-        // Unregister old hotkey
-        HotkeyManager.shared.unregister()
-
-        // Register new hotkey
-        HotkeyManager.shared.register(keyCode: UInt32(hotkeyKeyCode), modifiers: hotkeyModifiers)
-
-        // Save to UserDefaults
-        let hotkeyConfig: [String: Any] = [
-            "display": hotkeyDisplay,
-            "keycode": Int(hotkeyKeyCode),
-            "modifiers": Int(hotkeyModifiers.rawValue)
-        ]
-        UserDefaults.standard.set(hotkeyConfig, forKey: "hotkey_config")
+        HotkeyManager.shared.set(name: "global", keyCode: hotkeyKeyCode, modifiers: hotkeyModifiers, display: hotkeyDisplay)
 
         // Show saved indicator
         withAnimation {
