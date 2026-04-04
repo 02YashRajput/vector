@@ -48,6 +48,7 @@ enum CommandType: String, CaseIterable {
     case alias
     case appSettings
     case project
+    case quickLink
 
     var displayName: String {
         switch self {
@@ -59,6 +60,7 @@ enum CommandType: String, CaseIterable {
         case .alias: return "Alias"
         case .appSettings: return "Settings"
         case .project: return "Project"
+        case .quickLink: return "Quick Link"
         }
     }
 
@@ -72,6 +74,7 @@ enum CommandType: String, CaseIterable {
         case .alias: return "arrow.forward.circle.fill"
         case .appSettings: return "gearshape.2.fill"
         case .project: return "folder.fill"
+        case .quickLink: return "link"
         }
     }
 }

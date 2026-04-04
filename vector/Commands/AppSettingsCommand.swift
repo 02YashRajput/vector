@@ -11,6 +11,7 @@ final class AppSettingsCommand: BaseCommand {
         case aliases = "aliases"
         case scripts = "scripts"
         case projects = "projects"
+        case quickLinks = "quickLinks"
 
         var displayName: String {
             switch self {
@@ -18,6 +19,7 @@ final class AppSettingsCommand: BaseCommand {
             case .aliases: return "Aliases"
             case .scripts: return "Scripts and Commands"
             case .projects: return "Projects"
+            case .quickLinks: return "Quick Links"
             }
         }
 
@@ -27,6 +29,7 @@ final class AppSettingsCommand: BaseCommand {
             case .aliases: return "Create command shortcuts"
             case .scripts: return "Run shell scripts and commands"
             case .projects: return "Quick access to your projects"
+            case .quickLinks: return "Open bookmarked URLs in browser"
             }
         }
 
@@ -36,6 +39,7 @@ final class AppSettingsCommand: BaseCommand {
             case .aliases: return "arrow.forward.circle.fill"
             case .scripts: return "terminal.fill"
             case .projects: return "folder.fill"
+            case .quickLinks: return "link"
             }
         }
     }

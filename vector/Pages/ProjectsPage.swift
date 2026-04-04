@@ -514,7 +514,7 @@ struct CreateProjectSheet: View {
 
     // Open method (shared)
     @State private var openMethodType: OpenMethodType = .application
-    @State private var selectedAppIndex: Int = 0
+    @State private var selectedAppBundleId: String?
     @State private var selectedScriptCommandId: String = ""
     @State private var availableApps: [(name: String, bundleIdentifier: String, url: URL)] = []
 
@@ -798,12 +798,17 @@ struct CreateProjectSheet: View {
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 } else {
-                    Picker("Application", selection: $selectedAppIndex) {
-                        ForEach(0..<availableApps.count, id: \.self) { i in
-                            Text(availableApps[i].name).tag(i)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    PopoverPicker(
+                        selection: $selectedAppBundleId,
+                        options: availableApps.map {
+                            PopoverPickerOption(
+                                id: $0.bundleIdentifier,
+                                label: $0.name,
+                                icon: NSWorkspace.shared.icon(forFile: $0.url.path).resized(to: NSSize(width: 18, height: 18))
+                            )
+                        },
+                        placeholder: "Select application..."
+                    )
                 }
             } else {
                 let dynamicScripts = ScriptManager.shared.scripts.filter { $0.acceptsQuery }
@@ -834,7 +839,7 @@ struct CreateProjectSheet: View {
         }
 
         if openMethodType == .application {
-            return !availableApps.isEmpty
+            return selectedAppBundleId != nil
         } else {
             return !selectedScriptCommandId.isEmpty
         }
@@ -843,7 +848,9 @@ struct CreateProjectSheet: View {
     private func loadAppsForManual() {
         guard !path.isEmpty else { availableApps = []; return }
         availableApps = ProjectManager.getApplications(for: path)
-        if selectedAppIndex >= availableApps.count { selectedAppIndex = 0 }
+        if selectedAppBundleId == nil, let first = availableApps.first {
+            selectedAppBundleId = first.bundleIdentifier
+        }
     }
 
     private func loadAppsForPaths(_ paths: [String]) {
@@ -860,7 +867,9 @@ struct CreateProjectSheet: View {
         }
 
         availableApps = (commonApps ?? []).compactMap { appsByBundleId[$0] }
-        if selectedAppIndex >= availableApps.count { selectedAppIndex = 0 }
+        if selectedAppBundleId == nil, let first = availableApps.first {
+            selectedAppBundleId = first.bundleIdentifier
+        }
     }
 
     private func discoverProjects() {
@@ -908,8 +917,8 @@ struct CreateProjectSheet: View {
         let openMethod: ProjectOpenMethod
 
         if openMethodType == .application {
-            guard selectedAppIndex < availableApps.count else { return }
-            let app = availableApps[selectedAppIndex]
+            guard let bundleId = selectedAppBundleId,
+                  let app = availableApps.first(where: { $0.bundleIdentifier == bundleId }) else { return }
             openMethod = .application(bundleIdentifier: app.bundleIdentifier, name: app.name, url: app.url)
         } else {
             guard !selectedScriptCommandId.isEmpty else { return }
@@ -963,7 +972,7 @@ struct EditProjectSheet: View {
     }
 
     @State private var openMethodType: OpenMethodType
-    @State private var selectedAppIndex: Int = 0
+    @State private var selectedAppBundleId: String?
     @State private var selectedScriptCommandId: String
     @State private var availableApps: [(name: String, bundleIdentifier: String, url: URL)] = []
 
@@ -979,14 +988,17 @@ struct EditProjectSheet: View {
 
         let resolvedMethod = project.openMethodOverride ?? ProjectManager.shared.getGroup(byId: project.groupId)?.openMethod
         switch resolvedMethod {
-        case .application:
+        case .application(let bundleId, _, _):
             _openMethodType = State(initialValue: .application)
+            _selectedAppBundleId = State(initialValue: bundleId)
             _selectedScriptCommandId = State(initialValue: "")
         case .scriptCommand(let commandId):
             _openMethodType = State(initialValue: .scriptCommand)
+            _selectedAppBundleId = State(initialValue: nil)
             _selectedScriptCommandId = State(initialValue: commandId)
         case .none:
             _openMethodType = State(initialValue: .application)
+            _selectedAppBundleId = State(initialValue: nil)
             _selectedScriptCommandId = State(initialValue: "")
         }
     }
@@ -1072,12 +1084,17 @@ struct EditProjectSheet: View {
                                 .font(.system(size: 11))
                                 .foregroundColor(.orange)
                         } else {
-                            Picker("Application", selection: $selectedAppIndex) {
-                                ForEach(0..<availableApps.count, id: \.self) { i in
-                                    Text(availableApps[i].name).tag(i)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            PopoverPicker(
+                                selection: $selectedAppBundleId,
+                                options: availableApps.map {
+                                    PopoverPickerOption(
+                                        id: $0.bundleIdentifier,
+                                        label: $0.name,
+                                        icon: NSWorkspace.shared.icon(forFile: $0.url.path).resized(to: NSSize(width: 18, height: 18))
+                                    )
+                                },
+                                placeholder: "Select application..."
+                            )
                         }
                     } else {
                         let dynamicScripts = ScriptManager.shared.scripts.filter { $0.acceptsQuery }
@@ -1132,7 +1149,7 @@ struct EditProjectSheet: View {
 
     private var canSave: Bool {
         if openMethodType == .application {
-            return !availableApps.isEmpty
+            return selectedAppBundleId != nil
         } else {
             return !selectedScriptCommandId.isEmpty
         }
@@ -1141,23 +1158,18 @@ struct EditProjectSheet: View {
     private func loadApps() {
         availableApps = ProjectManager.getApplications(for: project.path)
 
-        // Pre-select current app
-        let resolvedMethod = project.openMethodOverride ?? group?.openMethod
-        if case .application(let bundleId, _, _) = resolvedMethod {
-            if let idx = availableApps.firstIndex(where: { $0.bundleIdentifier == bundleId }) {
-                selectedAppIndex = idx
-            }
+        // Pre-select current app if not already set
+        if selectedAppBundleId == nil, let first = availableApps.first {
+            selectedAppBundleId = first.bundleIdentifier
         }
-
-        if selectedAppIndex >= availableApps.count { selectedAppIndex = 0 }
     }
 
     private func saveProject() {
         let openMethod: ProjectOpenMethod
 
         if openMethodType == .application {
-            guard selectedAppIndex < availableApps.count else { return }
-            let app = availableApps[selectedAppIndex]
+            guard let bundleId = selectedAppBundleId,
+                  let app = availableApps.first(where: { $0.bundleIdentifier == bundleId }) else { return }
             openMethod = .application(bundleIdentifier: app.bundleIdentifier, name: app.name, url: app.url)
         } else {
             guard !selectedScriptCommandId.isEmpty else { return }

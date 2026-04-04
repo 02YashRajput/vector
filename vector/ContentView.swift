@@ -15,6 +15,7 @@ enum Page {
     case aliases
     case scripts
     case projects
+    case quickLinks
 }
 
 struct RootView: View {
@@ -35,6 +36,8 @@ struct RootView: View {
                 ScriptsPage(page: $page)
             case .projects:
                 ProjectsPage(page: $page)
+            case .quickLinks:
+                QuickLinksPage(page: $page)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .changePage)) { notification in
@@ -49,6 +52,8 @@ struct RootView: View {
                     page = .scripts
                 case .projects:
                     page = .projects
+                case .quickLinks:
+                    page = .quickLinks
                 }
             }
         }

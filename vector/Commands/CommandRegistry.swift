@@ -83,6 +83,9 @@ final class CommandRegistry: ObservableObject {
 
         let projectsCommand = AppSettingsCommand(page: .projects)
         register(projectsCommand)
+
+        let quickLinksCommand = AppSettingsCommand(page: .quickLinks)
+        register(quickLinksCommand)
     }
 
     func registerSystemCommands() {
@@ -115,5 +118,10 @@ final class CommandRegistry: ObservableObject {
     func reregisterApplications() {
         allCommands.removeAll { $0.type == .application }
         ApplicationManager.shared.registerAllApplications()
+    }
+
+    func reregisterQuickLinks() {
+        allCommands.removeAll { $0.type == .quickLink }
+        QuickLinkManager.shared.registerAllQuickLinks()
     }
 }

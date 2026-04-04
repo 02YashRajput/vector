@@ -164,6 +164,7 @@ struct SearchPage: View {
                 AliasManager.shared.registerAllAliases()
                 ScriptManager.shared.registerAllScripts()
                 ProjectManager.shared.registerAllProjects()
+                QuickLinkManager.shared.registerAllQuickLinks()
             }
 
             // Focus search bar when page appears
