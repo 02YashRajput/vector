@@ -394,84 +394,93 @@ struct CreateProjectSheet: View {
             // Header
             HStack {
                 Text("Add Project")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                 Spacer()
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.system(size: 18))
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.cursor)
             }
-            .padding(20)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
             .background(Color(.windowBackgroundColor))
 
             Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Source picker
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Source")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 16) {
+                // Source picker
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Source")
+                        .font(.system(size: 13, weight: .medium))
 
-                        Picker("", selection: $mode) {
-                            ForEach(Mode.allCases, id: \.self) { m in
-                                Text(m.rawValue).tag(m)
-                            }
+                    Picker("", selection: $mode) {
+                        ForEach(Mode.allCases, id: \.self) { m in
+                            Text(m.rawValue).tag(m)
                         }
-                        .pickerStyle(.segmented)
                     }
+                    .pickerStyle(.segmented)
+                }
 
-                    if mode == .manual {
-                        manualSection
-                    } else {
-                        discoverySection
-                    }
+                if mode == .manual {
+                    manualSection
+                } else {
+                    discoverySection
+                }
 
-                    Divider()
+                Divider()
 
-                    openMethodSection
+                openMethodSection
 
-                    if let error = errorMessage {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.system(size: 13))
+                if let error = errorMessage {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text(error)
+                            .font(.system(size: 12))
                             .foregroundColor(.orange)
                     }
+                }
 
-                    if let success = successMessage {
-                        Label(success, systemImage: "checkmark.circle.fill")
-                            .font(.system(size: 13))
+                if let success = successMessage {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text(success)
+                            .font(.system(size: 12))
                             .foregroundColor(.green)
                     }
                 }
-                .padding(20)
             }
+            .padding(24)
 
             Divider()
 
             // Footer
-            HStack {
+            HStack(spacing: 12) {
                 Spacer()
+
                 Button("Cancel") { dismiss() }
+                    .font(.system(size: 13))
                     .buttonStyle(.cursor)
 
                 Button(action: save) {
                     Text("Add Project")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 8)
-                        .background(canSave ? Color.accentColor : Color.gray)
+                        .background(canSave ? Color.accentColor : Color.secondary.opacity(0.15))
                         .cornerRadius(8)
                 }
                 .buttonStyle(.cursor)
                 .disabled(!canSave)
             }
-            .padding(20)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .frame(width: 520, height: 560)
+        .frame(width: 520)
         .sheet(isPresented: $showScriptSheet) {
             ScriptEditorSheet(
                 mode: .inlineScript,
@@ -500,19 +509,22 @@ struct CreateProjectSheet: View {
     private var manualSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Project Path")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.secondary)
+                .font(.system(size: 13, weight: .medium))
 
             HStack(spacing: 8) {
                 TextField("/path/to/project", text: $path)
                     .textFieldStyle(PlainTextFieldStyle())
                     .font(.system(size: 14))
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(.controlBackgroundColor))
+                    .padding(.vertical, 10)
+                    .background(Color(.windowBackgroundColor).opacity(0.5))
                     .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                    )
 
-                Button("Browse") {
+                Button(action: {
                     let panel = NSOpenPanel()
                     panel.canChooseFiles = false
                     panel.canChooseDirectories = true
@@ -520,9 +532,20 @@ struct CreateProjectSheet: View {
                     if panel.runModal() == .OK, let url = panel.url {
                         path = url.path
                     }
+                }) {
+                    Text("Browse")
+                        .font(.system(size: 12, weight: .medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.secondary.opacity(0.2))
+                        .cornerRadius(6)
                 }
                 .buttonStyle(.cursor)
             }
+
+            Text("Full path to the project directory.")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
         }
     }
 
@@ -531,12 +554,7 @@ struct CreateProjectSheet: View {
     private var discoverySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Discovery Script")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.secondary)
-
-            Text("A script that outputs project paths, one per line.")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .font(.system(size: 13, weight: .medium))
 
             HStack(spacing: 8) {
                 if let script = discoveryScriptItem {
@@ -548,59 +566,79 @@ struct CreateProjectSheet: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.blue.opacity(0.1))
+                    .background(Color.accentColor.opacity(0.12))
                     .cornerRadius(6)
-                    .foregroundColor(.blue)
+                    .foregroundColor(.accentColor)
                 }
 
-                Button(discoveryScriptItem == nil ? "Create Script" : "Edit Script") {
-                    showScriptSheet = true
+                Button(action: { showScriptSheet = true }) {
+                    Text(discoveryScriptItem == nil ? "Create Script" : "Edit Script")
+                        .font(.system(size: 12, weight: .medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.secondary.opacity(0.2))
+                        .cornerRadius(6)
                 }
                 .buttonStyle(.cursor)
 
                 if discoveryScriptItem != nil && !isDiscovering {
-                    Button("Re-run") { discoverProjects() }
-                        .buttonStyle(.cursor)
+                    Button(action: { discoverProjects() }) {
+                        Text("Re-run")
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.secondary.opacity(0.2))
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.cursor)
                 }
             }
+
+            Text("A script that outputs project paths, one per line.")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
 
             if isDiscovering {
                 HStack(spacing: 8) {
                     ProgressView().scaleEffect(0.7)
                     Text("Discovering...")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
             }
 
             if !discoveredPaths.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Found \(discoveredPaths.count) project\(discoveredPaths.count == 1 ? "" : "s")")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.green)
 
-                    ForEach(discoveredPaths.prefix(5), id: \.self) { p in
-                        HStack(spacing: 4) {
-                            Image(systemName: "folder")
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
-                            Text(URL(fileURLWithPath: p).lastPathComponent)
-                                .font(.system(size: 11, weight: .medium))
-                            Text("- \(p)")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 3) {
+                            ForEach(discoveredPaths, id: \.self) { p in
+                                HStack(spacing: 6) {
+                                    Image(systemName: "folder.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(.secondary)
+                                    Text(URL(fileURLWithPath: p).lastPathComponent)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Text(abbreviatePath(p))
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary.opacity(0.7))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                                .padding(.vertical, 2)
+                            }
                         }
                     }
-                    if discoveredPaths.count > 5 {
-                        Text("+ \(discoveredPaths.count - 5) more")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
+                    .frame(maxHeight: 140)
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.controlBackgroundColor).opacity(0.5))
+                .background(Color(.windowBackgroundColor).opacity(0.5))
                 .cornerRadius(8)
             }
         }
@@ -609,10 +647,9 @@ struct CreateProjectSheet: View {
     // MARK: Open Method Section
 
     private var openMethodSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Open With")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.secondary)
+                .font(.system(size: 13, weight: .medium))
 
             Picker("", selection: $openMethodType) {
                 ForEach(OpenMethodType.allCases, id: \.self) { type in
@@ -624,7 +661,7 @@ struct CreateProjectSheet: View {
             if openMethodType == .application {
                 if availableApps.isEmpty {
                     Text(mode == .manual ? "Enter a valid path to see applications" : "Run discovery to see applications")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 } else {
                     Picker("Application", selection: $selectedAppIndex) {
@@ -632,13 +669,13 @@ struct CreateProjectSheet: View {
                             Text(availableApps[i].name).tag(i)
                         }
                     }
-                    .frame(width: 300)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
                 let dynamicScripts = ScriptManager.shared.scripts.filter { $0.acceptsQuery }
                 if dynamicScripts.isEmpty {
                     Text("No script commands with arguments found")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(.orange)
                 } else {
                     Picker("Command", selection: $selectedScriptCommandId) {
@@ -647,7 +684,7 @@ struct CreateProjectSheet: View {
                             Text(script.name).tag("script.\(script.id.uuidString)")
                         }
                     }
-                    .frame(width: 300)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -725,6 +762,14 @@ struct CreateProjectSheet: View {
         }
     }
 
+    private func abbreviatePath(_ path: String) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if path.hasPrefix(home) {
+            return "~" + path.dropFirst(home.count)
+        }
+        return path
+    }
+
     private func save() {
         let openMethod: ProjectOpenMethod
 
@@ -800,65 +845,66 @@ struct EditProjectSheet: View {
             // Header
             HStack {
                 Text("Edit Project")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                 Spacer()
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.system(size: 18))
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.cursor)
             }
-            .padding(20)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
             .background(Color(.windowBackgroundColor))
 
             Divider()
 
             VStack(alignment: .leading, spacing: 20) {
                 // Project info (read-only)
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "folder.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.accentColor)
+                HStack(spacing: 12) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.accentColor)
+                        .frame(width: 36, height: 36)
+                        .background(Color.accentColor.opacity(0.1))
+                        .cornerRadius(8)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(project.name)
-                                .font(.system(size: 16, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(project.name)
+                            .font(.system(size: 14, weight: .semibold))
 
-                            Text(project.source.displayName)
-                                .font(.system(size: 10, weight: .medium))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(project.source == .manual ? Color.green.opacity(0.15) : Color.blue.opacity(0.15))
-                                .cornerRadius(4)
-                                .foregroundColor(project.source == .manual ? .green : .blue)
-                        }
+                        Text(project.source.displayName)
+                            .font(.system(size: 10, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(project.source == .manual ? Color.green.opacity(0.12) : Color.blue.opacity(0.12))
+                            .cornerRadius(4)
+                            .foregroundColor(project.source == .manual ? .green : .blue)
                     }
+                }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Path")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Path")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
 
-                        Text(project.path)
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(.controlBackgroundColor).opacity(0.5))
-                            .cornerRadius(8)
-                    }
+                    Text(project.path)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.windowBackgroundColor).opacity(0.5))
+                        .cornerRadius(8)
                 }
 
                 Divider()
 
                 // Open method (editable)
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("Open With")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 13, weight: .medium))
 
                     Picker("", selection: $openMethodType) {
                         ForEach(OpenMethodType.allCases, id: \.self) { type in
@@ -870,7 +916,7 @@ struct EditProjectSheet: View {
                     if openMethodType == .application {
                         if availableApps.isEmpty {
                             Text("No applications found for this path")
-                                .font(.system(size: 12))
+                                .font(.system(size: 11))
                                 .foregroundColor(.orange)
                         } else {
                             Picker("Application", selection: $selectedAppIndex) {
@@ -878,13 +924,13 @@ struct EditProjectSheet: View {
                                     Text(availableApps[i].name).tag(i)
                                 }
                             }
-                            .frame(width: 300)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     } else {
                         let dynamicScripts = ScriptManager.shared.scripts.filter { $0.acceptsQuery }
                         if dynamicScripts.isEmpty {
                             Text("No script commands with arguments found")
-                                .font(.system(size: 12))
+                                .font(.system(size: 11))
                                 .foregroundColor(.orange)
                         } else {
                             Picker("Command", selection: $selectedScriptCommandId) {
@@ -893,36 +939,39 @@ struct EditProjectSheet: View {
                                     Text(script.name).tag("script.\(script.id.uuidString)")
                                 }
                             }
-                            .frame(width: 300)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
             }
-            .padding(20)
+            .padding(24)
 
             Spacer()
 
             Divider()
 
             // Footer
-            HStack {
+            HStack(spacing: 12) {
                 Spacer()
+
                 Button("Cancel") { dismiss() }
+                    .font(.system(size: 13))
                     .buttonStyle(.cursor)
 
                 Button(action: saveProject) {
                     Text("Save")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 8)
-                        .background(canSave ? Color.accentColor : Color.gray)
+                        .background(canSave ? Color.accentColor : Color.secondary.opacity(0.15))
                         .cornerRadius(8)
                 }
                 .buttonStyle(.cursor)
                 .disabled(!canSave)
             }
-            .padding(20)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
         .frame(width: 480, height: 420)
         .onAppear { loadApps() }

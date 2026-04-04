@@ -231,119 +231,142 @@ struct CreateAliasSheet: View {
             // Header
             HStack {
                 Text("Create Alias")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                 Spacer()
                 Button(action: onDismiss) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.system(size: 18))
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.cursor)
             }
-            .padding(20)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
             .background(Color(.windowBackgroundColor))
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 20) {
-                // Command Selection
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Command")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Command Selection
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Command")
+                            .font(.system(size: 13, weight: .medium))
 
-                    // Search Field
-                    HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                        TextField("Search commands...", text: $searchText)
-                            .textFieldStyle(PlainTextFieldStyle())
-                            .font(.system(size: 14))
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                            TextField("Search commands...", text: $searchText)
+                                .textFieldStyle(PlainTextFieldStyle())
+                                .font(.system(size: 14))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(.windowBackgroundColor).opacity(0.5))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                        )
+
+                        ScrollView {
+                            LazyVStack(spacing: 2) {
+                                ForEach(filteredCommands.prefix(15), id: \.id) { command in
+                                    CommandPickerRow(command: command, isSelected: selectedCommandId == command.id) {
+                                        selectedCommandId = command.id
+                                    }
+                                }
+                            }
+                            .padding(4)
+                        }
+                        .frame(height: 200)
+                        .background(Color(.windowBackgroundColor).opacity(0.5))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                        )
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(.controlBackgroundColor))
-                    .cornerRadius(8)
 
-                    // Command List
-                    ScrollView {
-                        LazyVStack(spacing: 2) {
-                            ForEach(filteredCommands.prefix(15), id: \.id) { command in
-                                CommandPickerRow(command: command, isSelected: selectedCommandId == command.id) {
-                                    selectedCommandId = command.id
+                    // Alias Input
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Alias")
+                            .font(.system(size: 13, weight: .medium))
+
+                        HStack(spacing: 12) {
+                            TextField("e.g., chrome", text: $aliasText)
+                                .textFieldStyle(PlainTextFieldStyle())
+                                .font(.system(size: 14, weight: .medium, design: .monospaced))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color(.windowBackgroundColor).opacity(0.5))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                )
+
+                            if let command = selectedCommand {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                    Text(command.title)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
                                 }
                             }
                         }
+
+                        Text("Type this alias in search to quickly launch the command")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
                     }
-                    .frame(maxHeight: 200)
-                    .background(Color(.controlBackgroundColor).opacity(0.5))
-                    .cornerRadius(8)
-                }
 
-                // Alias Input
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Alias")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.secondary)
-
-                    HStack(spacing: 12) {
-                        TextField("e.g., chrome", text: $aliasText)
-                            .textFieldStyle(PlainTextFieldStyle())
-                            .font(.system(size: 16, weight: .medium, design: .monospaced))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(Color(.controlBackgroundColor))
-                            .cornerRadius(8)
-
-                        if let command = selectedCommand {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                                Text(command.title)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.primary)
-                                    .lineLimit(1)
-                            }
+                    // Error Message
+                    if let error = errorMessage {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            Text(error)
+                                .font(.system(size: 12))
+                                .foregroundColor(.orange)
                         }
                     }
-
-                    Text("Type this alias in search to quickly launch the command")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
                 }
-
-                // Error Message
-                if let error = errorMessage {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
-                        Text(error)
-                            .font(.system(size: 13))
-                            .foregroundColor(.orange)
-                    }
-                }
-
-                // Create Button
-                HStack {
-                    Spacer()
-                    Button(action: createAlias) {
-                        Text("Create Alias")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 10)
-                            .background(selectedCommandId != nil && !aliasText.trimmingCharacters(in: .whitespaces).isEmpty ? Color.accentColor : Color.gray)
-                            .cornerRadius(8)
-                    }
-                    .buttonStyle(.cursor)
-                    .disabled(selectedCommandId == nil || aliasText.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
+                .padding(24)
             }
-            .padding(20)
+
+            Divider()
+
+            // Footer
+            HStack(spacing: 12) {
+                Spacer()
+
+                Button("Cancel") {
+                    onDismiss()
+                }
+                .font(.system(size: 13))
+                .buttonStyle(.cursor)
+
+                Button(action: createAlias) {
+                    Text("Create Alias")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .background(selectedCommandId != nil && !aliasText.trimmingCharacters(in: .whitespaces).isEmpty ? Color.accentColor : Color.secondary.opacity(0.15))
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.cursor)
+                .disabled(selectedCommandId == nil || aliasText.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .frame(width: 500, height: 480)
+        .frame(width: 500, height: 520)
     }
 
     private func createAlias() {
@@ -387,13 +410,13 @@ struct CommandPickerRow: View {
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 16))
+                    .font(.system(size: 14))
                     .foregroundColor(.accentColor)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
         .cornerRadius(6)
         .contentShape(Rectangle())
         .onTapGesture {

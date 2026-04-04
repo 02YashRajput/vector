@@ -33,7 +33,7 @@ struct SettingsPage: View {
                 BackButton(action: {})
                     .opacity(0)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 32)
             .padding(.vertical, 16)
             .background(Color(.windowBackgroundColor))
 
@@ -46,7 +46,7 @@ struct SettingsPage: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Text("Global Hotkey")
-                                    .font(.system(size: 14))
+                                    .font(.system(size: 13))
 
                                 Spacer()
 
@@ -54,13 +54,13 @@ struct SettingsPage: View {
                                     if hotkeyDisplay.isEmpty {
                                         Text("Not set")
                                             .foregroundColor(.secondary)
-                                            .font(.system(size: 14))
+                                            .font(.system(size: 13))
                                     } else {
                                         Text(hotkeyDisplay)
                                             .font(.system(size: 14, weight: .medium, design: .monospaced))
                                             .padding(.horizontal, 10)
                                             .padding(.vertical, 4)
-                                            .background(Color.accentColor.opacity(0.15))
+                                            .background(Color.accentColor.opacity(0.12))
                                             .cornerRadius(6)
                                     }
 
@@ -81,7 +81,7 @@ struct SettingsPage: View {
                             .cornerRadius(8)
 
                             Text("Press modifier keys (Cmd, Ctrl, Alt, Shift) plus a key to set your global shortcut.")
-                                .font(.system(size: 12))
+                                .font(.system(size: 11))
                                 .foregroundColor(.secondary)
 
                             if showHotkeySaved {
@@ -89,7 +89,7 @@ struct SettingsPage: View {
                                     Image(systemName: "checkmark.circle.fill")
                                         .foregroundColor(.green)
                                     Text("Hotkey saved")
-                                        .font(.system(size: 12))
+                                        .font(.system(size: 11))
                                         .foregroundColor(.green)
                                 }
                                 .transition(.opacity)
@@ -102,9 +102,9 @@ struct SettingsPage: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Launch at Login")
-                                    .font(.system(size: 14))
+                                    .font(.system(size: 13))
                                 Text("Automatically start Vector when you log in")
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 11))
                                     .foregroundColor(.secondary)
                             }
 
@@ -112,6 +112,7 @@ struct SettingsPage: View {
 
                             Toggle("", isOn: $launchAtStartup)
                                 .toggleStyle(.switch)
+                                .labelsHidden()
                                 .onChange(of: launchAtStartup) { _, newValue in
                                     setLaunchAtLogin(enabled: newValue)
                                     UserDefaults.standard.set(newValue, forKey: "launch_at_startup")
@@ -127,7 +128,7 @@ struct SettingsPage: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Text("Preferred Browser")
-                                    .font(.system(size: 14))
+                                    .font(.system(size: 13))
 
                                 Spacer()
 
@@ -171,10 +172,10 @@ struct SettingsPage: View {
                                                     .frame(width: 18, height: 18)
                                             }
                                             Text(browser.name)
-                                                .font(.system(size: 14))
+                                                .font(.system(size: 13))
                                         } else {
                                             Text("Default")
-                                                .font(.system(size: 14))
+                                                .font(.system(size: 13))
                                                 .foregroundColor(.secondary)
                                         }
 
@@ -199,7 +200,7 @@ struct SettingsPage: View {
                             .cornerRadius(8)
 
                             Text("Choose which browser opens web searches. Default uses your system default browser.")
-                                .font(.system(size: 12))
+                                .font(.system(size: 11))
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -216,7 +217,7 @@ struct SettingsPage: View {
                                     Text("Vector")
                                         .font(.system(size: 16, weight: .semibold))
                                     Text("Version 1.0.0")
-                                        .font(.system(size: 12))
+                                        .font(.system(size: 11))
                                         .foregroundColor(.secondary)
                                 }
                             }
@@ -224,7 +225,7 @@ struct SettingsPage: View {
                             Divider()
 
                             Text("A keyboard-first command launcher for macOS. Search apps, run scripts, open URLs, and more—all without touching your mouse.")
-                                .font(.system(size: 13))
+                                .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                         }
                         .padding(12)
@@ -232,53 +233,12 @@ struct SettingsPage: View {
                         .cornerRadius(8)
                     }
 
-                    // Aliases Section
-                    SettingsSection(title: "Shortcuts", icon: "arrow.forward.circle.fill") {
-                        Button(action: { page = .aliases }) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Manage Aliases")
-                                        .font(.system(size: 14))
-                                    Text("Create shortcuts for your favorite commands")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(12)
-                            .background(Color(.windowBackgroundColor).opacity(0.5))
-                            .cornerRadius(8)
-                        }
-                        .buttonStyle(.cursor)
-                    }
 
-                    // Scripts Section
-                    SettingsSection(title: "Automation", icon: "terminal.fill") {
-                        Button(action: { page = .scripts }) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Manage Scripts")
-                                        .font(.system(size: 14))
-                                    Text("Run shell scripts and commands")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(12)
-                            .background(Color(.windowBackgroundColor).opacity(0.5))
-                            .cornerRadius(8)
-                        }
-                        .buttonStyle(.cursor)
-                    }
+
+  
+             
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 32)
                 .padding(.vertical, 20)
             }
         }
@@ -459,7 +419,7 @@ struct SettingsSection<Content: View>: View {
                     .font(.system(size: 14))
                     .foregroundColor(.accentColor)
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
             }
 
             content

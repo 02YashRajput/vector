@@ -19,107 +19,136 @@ struct OnBoardingPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 12) {
+            // Hero section
+            VStack(spacing: 8) {
+                Image(systemName: "bolt.horizontal.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(.accentColor)
+                    .padding(.bottom, 4)
+
                 Text("Welcome to Vector")
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 28, weight: .bold))
 
                 Text("Your keyboard-powered command launcher")
-                    .font(.system(size: 15))
+                    .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 36)
-            .padding(.bottom, 28)
+            .padding(.top, 32)
+            .padding(.bottom, 24)
 
-            VStack(spacing: 12) {
-                FeatureRow(icon: "⌘", label: "Instant Access", description: "Open anywhere with your hotkey")
-                FeatureRow(icon: "→", label: "Smart Commands", description: "Use prefixes like git:, code:, jira:")
+            // Feature highlights
+            HStack(spacing: 12) {
+                FeatureRow(icon: "command", label: "Instant Access", description: "Open anywhere with your hotkey")
+                FeatureRow(icon: "arrow.right", label: "Smart Commands", description: "Use prefixes like git:, code:, jira:")
             }
-            .padding(.horizontal, 40)
-            .padding(.bottom, 28)
+            .padding(.horizontal, 32)
+            .padding(.bottom, 24)
 
             Divider()
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 32)
 
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Let's get you set up")
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            // Setup section
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 8) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14))
+                        .foregroundColor(.accentColor)
+                    Text("Let's get you set up")
+                        .font(.system(size: 16, weight: .semibold))
+                }
 
-                VStack(alignment: .leading, spacing: 6) {
+                // Hotkey input
+                VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 4) {
                         Text("Keyboard shortcut")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: 13, weight: .medium))
                         Text("*")
                             .foregroundColor(.red)
-                            .font(.system(size: 14))
+                            .font(.system(size: 13))
                     }
 
                     HStack {
                         if hotkeyDisplay.isEmpty {
-                            Text("Click to set your hotkey")
+                            Text(isCapturing ? "Press your shortcut…" : "Click to set your hotkey")
                                 .foregroundColor(.secondary)
-                                .font(.system(size: 15))
+                                .font(.system(size: 14))
                         } else {
                             Text(hotkeyDisplay)
-                                .font(.system(size: 15, weight: .medium, design: .monospaced))
+                                .font(.system(size: 14, weight: .medium, design: .monospaced))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Color.accentColor.opacity(0.12))
+                                .cornerRadius(6)
                         }
                         Spacer()
                         if isHotkeySet {
                             Button(action: clearHotkey) {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(.secondary)
-                                    .font(.system(size: 16))
+                                    .font(.system(size: 14))
                             }
                             .buttonStyle(.cursor)
                         }
                     }
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(.windowBackgroundColor).opacity(0.5))
-                    )
+                    .background(Color(.windowBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: 8)
                             .stroke(isCapturing ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: isCapturing ? 2 : 1)
                     )
+                    .contentShape(Rectangle())
                     .onTapGesture {
                         startCapturing()
                     }
 
                     Text("Include Cmd, Ctrl, Alt, or Shift • e.g., Cmd+Space")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
 
-                Toggle(isOn: $launchAtStartup) {
-                    Text("Launch Vector at startup")
-                        .font(.system(size: 14))
+                // Launch at startup toggle
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Launch at startup")
+                            .font(.system(size: 13))
+                        Text("Automatically start Vector when you log in")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $launchAtStartup)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
                 }
-                .toggleStyle(.checkbox)
+                .padding(12)
+                .background(Color(.windowBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
             }
-            .padding(.horizontal, 40)
+            .padding(.horizontal, 32)
             .padding(.top, 20)
 
             Spacer()
 
+            // CTA button
             Button(action: completeOnboarding) {
-                HStack {
+                HStack(spacing: 8) {
                     Text("Get Started")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("→")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 13, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(isHotkeySet ? Color.accentColor : Color.gray.opacity(0.3))
+                .padding(.vertical, 11)
+                .background(isHotkeySet ? Color.accentColor : Color.secondary.opacity(0.15))
                 .foregroundColor(isHotkeySet ? .white : .secondary)
-                .cornerRadius(10)
+                .cornerRadius(8)
             }
             .buttonStyle(.cursor)
             .disabled(!isHotkeySet)
-            .padding(.horizontal, 40)
-            .padding(.bottom, 32)
+            .padding(.horizontal, 32)
+            .padding(.bottom, 28)
         }
         .frame(width: 700, height: 560)
         .onAppear {
@@ -214,34 +243,38 @@ struct OnBoardingPage: View {
 }
 
 
+// MARK: - Feature Row
+
 struct FeatureRow: View {
     let icon: String
     let label: String
     let description: String
 
     var body: some View {
-        HStack(spacing: 16) {
-            Text(icon)
-                .font(.system(size: 24))
-                .frame(width: 44, height: 44)
-                .background(Color(.windowBackgroundColor).opacity(0.5))
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(.accentColor)
+                .frame(width: 40, height: 40)
+                .background(Color.accentColor.opacity(0.1))
                 .cornerRadius(10)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                 Text(description)
-                    .font(.system(size: 13))
+                    .font(.system(size: 12))
                     .foregroundColor(.secondary)
+                    .lineLimit(1)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.windowBackgroundColor).opacity(0.3))
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(.windowBackgroundColor).opacity(0.5))
         )
     }
 }
