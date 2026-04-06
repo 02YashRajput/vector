@@ -32,8 +32,28 @@ struct SearchPage: View {
     @StateObject private var panelManager = PanelManager.shared
     @StateObject private var commandRegistry = CommandRegistry.shared
 
+    /// When in argument mode, returns a CommandType to use as suggestion filter, or nil for no suggestions.
+    private var argumentSuggestionFilter: CommandType? {
+        guard case .argument(let command) = mode,
+              let prefixCmd = command as? PrefixCommand,
+              prefixCmd.prefixItem.useProjectSuggestions else {
+            return nil
+        }
+        return .project
+    }
+
     private var filteredCommands: [any Command] {
-        if mode.isArgument { return [] }
+        if mode.isArgument {
+            guard let suggestionType = argumentSuggestionFilter else { return [] }
+            let allOfType = commandRegistry.allCommands.filter { $0.type == suggestionType }
+            let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+            guard !query.isEmpty else { return allOfType }
+            return allOfType.filter {
+                $0.title.lowercased().contains(query) ||
+                ($0.subtitle?.lowercased().contains(query) ?? false)
+            }
+        }
+
         let results = commandRegistry.search(query: searchText)
         if let filterType = mode.filterType {
             return results.filter { $0.type == filterType }
@@ -94,43 +114,8 @@ struct SearchPage: View {
                 .padding(.horizontal, 12)
 
             // Results list or argument mode hint
-            if case .argument(let command) = mode {
-                VStack(spacing: 12) {
-                    Spacer()
-                    HStack(spacing: 12) {
-                        if let icon = command.icon {
-                            Image(nsImage: icon)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 32, height: 32)
-                        } else {
-                            Image(systemName: command.type.iconName)
-                                .font(.system(size: 24))
-                                .foregroundColor(.accentColor)
-                        }
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(command.title)
-                                .font(.system(size: 16, weight: .medium))
-                            if let subtitle = command.subtitle {
-                                Text(subtitle)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    Text("Type your argument and press Enter to execute")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-
-                    Text("Press Escape to cancel")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary.opacity(0.7))
-
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
+            if mode.isArgument && filteredCommands.isEmpty {
+                argumentHintView
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -141,14 +126,18 @@ struct SearchPage: View {
                                     .contentShape(Rectangle())
                                     .onTapGesture {
                                         selectedIndex = index
-                                        handleCommandSelection(command)
+                                        if mode.isArgument {
+                                            executeArgumentWithSuggestion(command)
+                                        } else {
+                                            handleCommandSelection(command)
+                                        }
                                     }
                             }
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                     }
-                    .id(searchText)
+                    .id(mode.isArgument ? nil : searchText)
                     .onChange(of: selectedIndex) { oldValue, newValue in
                         proxy.scrollTo(newValue, anchor: .center)
                     }
@@ -228,23 +217,71 @@ struct SearchPage: View {
         }
     }
 
+    // MARK: - Argument Hint View
+
+    @ViewBuilder
+    private var argumentHintView: some View {
+        if let command = mode.argumentCommand {
+            VStack(spacing: 12) {
+                Spacer()
+                HStack(spacing: 12) {
+                    if let icon = command.icon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 32, height: 32)
+                    } else {
+                        Image(systemName: command.type.iconName)
+                            .font(.system(size: 24))
+                            .foregroundColor(.accentColor)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(command.title)
+                            .font(.system(size: 16, weight: .medium))
+                        if let subtitle = command.subtitle {
+                            Text(subtitle)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Text("Type your argument and press Enter to execute")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+
+                Text("Press Escape to cancel")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary.opacity(0.7))
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    // MARK: - Key Handling
+
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
+        let commands = filteredCommands
+
         switch event.keyCode {
         case 126: // Up arrow
-            if !mode.isArgument && selectedIndex > 0 {
+            if selectedIndex > 0 && !commands.isEmpty {
                 selectedIndex -= 1
             }
             return true
         case 125: // Down arrow
-            if !mode.isArgument && selectedIndex < filteredCommands.count - 1 {
+            if selectedIndex < commands.count - 1 {
                 selectedIndex += 1
             }
             return true
         case 36: // Return/Enter
             if mode.isArgument {
                 executeWithArgument()
-            } else {
-                handleCommandSelection(filteredCommands[selectedIndex])
+            } else if !commands.isEmpty, selectedIndex < commands.count {
+                handleCommandSelection(commands[selectedIndex])
             }
             return true
         default:
@@ -252,8 +289,11 @@ struct SearchPage: View {
         }
     }
 
+    // MARK: - Command Selection
+
     private func handleCommandSelection(_ command: any Command) {
-        guard !filteredCommands.isEmpty, selectedIndex < filteredCommands.count else { return }
+        let commands = filteredCommands
+        guard !commands.isEmpty, selectedIndex < commands.count else { return }
 
         if command.acceptsArguments {
             mode = .argument(command)
@@ -270,22 +310,52 @@ struct SearchPage: View {
         }
     }
 
+    // MARK: - Argument Execution
+
     private func executeWithArgument() {
         guard let command = mode.argumentCommand else { return }
 
-        command.execute(withArgument: searchText.trimmingCharacters(in: .whitespaces))
+        let commands = filteredCommands
+        if !commands.isEmpty, selectedIndex < commands.count {
+            executeArgumentWithSuggestion(commands[selectedIndex])
+        } else {
+            command.execute(withArgument: searchText.trimmingCharacters(in: .whitespaces))
+            dismissAndReset()
+        }
+    }
 
+    private func executeArgumentWithSuggestion(_ suggestion: any Command) {
+        guard let command = mode.argumentCommand else { return }
+
+        if let projectCmd = suggestion as? ProjectCommand {
+            command.execute(withArgument: projectCmd.project.path)
+        } else {
+            command.execute(withArgument: searchText.trimmingCharacters(in: .whitespaces))
+        }
+
+        dismissAndReset()
+    }
+
+    private func dismissAndReset() {
         mode = .normal
         searchText = ""
         selectedIndex = 0
         PanelManager.shared.hide()
     }
 
+    // MARK: - Placeholder
+
     private var searchPlaceholder: String {
         switch mode {
-        case .argument: return "Enter argument..."
-        case .filtered(let type): return "Search \(type.displayName.lowercased())s..."
-        case .normal: return "Search apps, commands..."
+        case .argument:
+            if argumentSuggestionFilter != nil {
+                return "Search projects..."
+            }
+            return "Enter argument..."
+        case .filtered(let type):
+            return "Search \(type.displayName.lowercased())s..."
+        case .normal:
+            return "Search apps, commands..."
         }
     }
 }

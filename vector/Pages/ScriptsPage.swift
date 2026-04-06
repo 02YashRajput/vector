@@ -44,7 +44,7 @@ struct ScriptsPage: View {
 
             Divider()
 
-            if scriptManager.scripts.isEmpty {
+            if scriptManager.scripts.filter({ !$0.isInternal }).isEmpty {
                 // Empty State
                 VStack(spacing: 16) {
                     Spacer()
@@ -76,7 +76,7 @@ struct ScriptsPage: View {
                 // Scripts List
                 ScrollView {
                     LazyVStack(spacing: 8) {
-                        ForEach(scriptManager.scripts) { script in
+                        ForEach(scriptManager.scripts.filter { !$0.isInternal }) { script in
                             ScriptRowView(script: script) {
                                 editingScript = script
                             }

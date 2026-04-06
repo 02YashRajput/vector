@@ -345,19 +345,20 @@ class ProjectManager: ObservableObject {
 
         DispatchQueue.main.async {
             for (groupId, paths) in allResults {
-                let pathSet = Set(paths)
-                let existingPaths = Set(self.projects(inGroup: groupId).map { $0.path })
+                let uniquePaths = NSOrderedSet(array: paths).array as! [String]
+                let pathSet = Set(uniquePaths)
+                let existingPaths = Set(self.projects.map { $0.path })
+
+                // Remove stale projects
+                self.projects.removeAll { $0.groupId == groupId && !pathSet.contains($0.path) }
 
                 // Add new projects
-                for path in paths where !existingPaths.contains(path) {
+                for path in uniquePaths where !existingPaths.contains(path) {
                     let project = Project(path: path, groupId: groupId)
                     if project.exists && project.isDirectory {
                         self.projects.append(project)
                     }
                 }
-
-                // Remove stale projects
-                self.projects.removeAll { $0.groupId == groupId && !pathSet.contains($0.path) }
             }
 
             self.save()
@@ -387,14 +388,15 @@ class ProjectManager: ObservableObject {
                     .map { $0.trimmingCharacters(in: .whitespaces) }
                     .filter { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) }
 
-                let pathSet = Set(paths)
-                let existingPaths = Set(self.projects(inGroup: groupId).map { $0.path })
+                let uniquePaths = NSOrderedSet(array: paths).array as! [String]
+                let pathSet = Set(uniquePaths)
+                let existingPaths = Set(self.projects.map { $0.path })
 
                 // Remove stale
                 self.projects.removeAll { $0.groupId == groupId && !pathSet.contains($0.path) }
 
-                // Add new
-                for path in paths where !existingPaths.contains(path) {
+                // Add new (check globally, not just within group)
+                for path in uniquePaths where !existingPaths.contains(path) {
                     let project = Project(path: path, groupId: groupId)
                     if project.exists && project.isDirectory {
                         self.projects.append(project)
